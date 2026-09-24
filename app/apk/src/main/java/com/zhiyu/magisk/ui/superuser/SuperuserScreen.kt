@@ -2,12 +2,15 @@ package com.zhiyu.magisk.ui.superuser
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,20 +20,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +38,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import com.zhiyu.magisk.ui.component.verticalScrollbar
+import com.zhiyu.magisk.ui.glass.GlassCard
+import com.zhiyu.magisk.ui.glass.GlassDefaults
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.ui.navigation.LocalNavigator
 import com.zhiyu.magisk.ui.navigation.Route
 import com.zhiyu.magisk.core.R as CoreR
@@ -61,12 +64,14 @@ fun SuperuserScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val navigator = LocalNavigator.current
+    val layoutDirection = LocalLayoutDirection.current
 
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            GlassTopAppBar(
                 title = { Text(stringResource(CoreR.string.superuser)) },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 scrollBehavior = scrollBehavior
             )
         }
@@ -80,7 +85,7 @@ fun SuperuserScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@Scaffold
+            return@GlassScreen
         }
 
         if (uiState.policies.isEmpty()) {
@@ -109,7 +114,7 @@ fun SuperuserScreen(
                     )
                 }
             }
-            return@Scaffold
+            return@GlassScreen
         }
 
         val listState = rememberLazyListState()
@@ -118,9 +123,19 @@ fun SuperuserScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .padding(padding)
-                .verticalScrollbar(listState, contentPadding = PaddingValues(vertical = 4.dp)),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                .verticalScrollbar(
+                    listState,
+                    contentPadding = PaddingValues(
+                        top = padding.calculateTopPadding() + 4.dp,
+                        bottom = padding.calculateBottomPadding() + 4.dp
+                    )
+                ),
+            contentPadding = PaddingValues(
+                start = padding.calculateStartPadding(layoutDirection) + 12.dp,
+                top = padding.calculateTopPadding() + 4.dp,
+                end = padding.calculateEndPadding(layoutDirection) + 12.dp,
+                bottom = padding.calculateBottomPadding() + 4.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { Spacer(Modifier.height(4.dp)) }
@@ -147,13 +162,13 @@ private fun PolicyCard(
     onDetail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        onClick = onDetail,
+    GlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .alpha(if (item.isEnabled) 1f else 0.5f),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            .alpha(if (item.isEnabled) 1f else 0.5f)
+            .clip(GlassDefaults.cardShape)
+            .clickable(onClick = onDetail),
+        contentPadding = PaddingValues(0.dp)
     ) {
         ListItem(
             leadingContent = {

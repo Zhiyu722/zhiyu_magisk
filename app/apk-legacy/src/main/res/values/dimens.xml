@@ -14,4 +14,13 @@
     <dimen name="r1">8dp</dimen>
 
     <dimen name="internal_action_bar_size">56dp</dimen>
+
+    <!--region Glassmorphism-->
+    <dimen name="glass_corner">20dp</dimen>
+    <dimen name="glass_corner_pill">28dp</dimen>
+    <dimen name="glass_corner_dialog">24dp</dimen>
+    <dimen name="glass_border">1dp</dimen>
+    <dimen name="glass_navigation_margin">16dp</dimen>
+    <dimen name="glass_navigation_margin_bottom">12dp</dimen>
+    <!--endregion-->
 </resources>

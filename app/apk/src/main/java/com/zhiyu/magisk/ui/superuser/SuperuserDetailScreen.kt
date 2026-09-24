@@ -14,24 +14,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +43,9 @@ import com.zhiyu.magisk.ui.component.ConfirmResult
 import com.zhiyu.magisk.ui.component.SettingsSwitch
 import com.zhiyu.magisk.ui.component.rememberConfirmDialog
 import com.zhiyu.magisk.ui.component.verticalScrollbar
+import com.zhiyu.magisk.ui.glass.GlassCard
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import kotlinx.coroutines.launch
 import com.zhiyu.magisk.core.R as CoreR
 
@@ -82,11 +80,12 @@ fun SuperuserDetailScreen(
         }
     }
 
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            GlassTopAppBar(
                 title = { Text(stringResource(CoreR.string.settings)) },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 navigationIcon = {
                     IconButton(
                         onClick = onBack
@@ -110,10 +109,10 @@ fun SuperuserDetailScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@Scaffold
+            return@GlassScreen
         }
 
-        if (item == null) return@Scaffold
+        if (item == null) return@GlassScreen
 
         Column(
             modifier = Modifier
@@ -125,10 +124,9 @@ fun SuperuserDetailScreen(
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                contentPadding = PaddingValues(0.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(18.dp),
@@ -167,30 +165,31 @@ fun SuperuserDetailScreen(
                 }
             }
 
-            Card(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                if (uiState.suRestrict || item.isRestricted) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (uiState.suRestrict || item.isRestricted) {
+                        SettingsSwitch(
+                            title = stringResource(CoreR.string.settings_su_restrict_title),
+                            checked = item.isRestricted,
+                            onCheckedChange = { viewModel.toggleRestrict(item) }
+                        )
+                        SettingsDivider()
+                    }
                     SettingsSwitch(
-                        title = stringResource(CoreR.string.settings_su_restrict_title),
-                        checked = item.isRestricted,
-                        onCheckedChange = { viewModel.toggleRestrict(item) }
+                        title = stringResource(CoreR.string.superuser_toggle_notification),
+                        checked = item.notification,
+                        onCheckedChange = { viewModel.updateNotify(item) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsDivider()
+                    SettingsSwitch(
+                        title = stringResource(CoreR.string.logs),
+                        checked = item.logging,
+                        onCheckedChange = { viewModel.updateLogging(item) }
+                    )
                 }
-                SettingsSwitch(
-                    title = stringResource(CoreR.string.superuser_toggle_notification),
-                    checked = item.notification,
-                    onCheckedChange = { viewModel.updateNotify(item) }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                SettingsSwitch(
-                    title = stringResource(CoreR.string.logs),
-                    checked = item.logging,
-                    onCheckedChange = { viewModel.updateLogging(item) }
-                )
             }
 
             RevokeButton(
@@ -222,7 +221,7 @@ private fun RevokeButton(
     Button(
         onClick = onClick,
         colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
             contentColor = MaterialTheme.colorScheme.onErrorContainer
         ),
         shape = ButtonDefaults.shape,
@@ -240,4 +239,14 @@ private fun RevokeButton(
             style = MaterialTheme.typography.labelLarge,
         )
     }
+}
+
+/** Hairline separator between the rows of one settings glass card. */
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    )
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -42,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import com.zhiyu.magisk.core.ktx.toast
 import com.zhiyu.magisk.ui.component.MagiskDialog
+import com.zhiyu.magisk.ui.glass.GlassSurface
 import com.zhiyu.magisk.ui.superuser.SharedUidBadge
 import com.zhiyu.magisk.core.R as CoreR
 
@@ -163,10 +163,13 @@ fun SuRequestScreen(
             modifier = Modifier.verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Card(
+            // Root-permission prompt: keep the glass body dense (>= 0.9 alpha) and the text crisp
+            GlassSurface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                tint = MaterialTheme.colorScheme.errorContainer,
+                body = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.92f),
+                contentPadding = PaddingValues(0.dp)
             ) {
                 Text(
                     text = stringResource(CoreR.string.su_warning),

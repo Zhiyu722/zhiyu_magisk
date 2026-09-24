@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    "Liquid glass" window backdrop.
+
+    A soft multi color wallpaper drawn behind the whole app. The base wash comes from
+    ?colorBackdropBase / ?colorBackdropBaseAlt, the soft radial blobs reuse the currently
+    selected theme's primary / secondary colors, so every ThemeFoundationMD2.* variant gets
+    its own colorful backdrop for free.
+
+    Only API 1 GradientDrawable features are used on purpose (no VectorDrawable <gradient>,
+    which would require API 24). <item android:alpha> on a layer list item requires API 23,
+    which matches this module's minSdk.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Base ink wash -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="?colorBackdropBaseAlt"
+                android:endColor="?colorBackdropBase"
+                android:startColor="?colorBackdropBase"
+                android:type="linear" />
+        </shape>
+    </item>
+
+    <!-- Primary blob, upper left -->
+    <item android:alpha="0.55">
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerX="0.15"
+                android:centerY="0.08"
+                android:endColor="#00000000"
+                android:gradientRadius="480dp"
+                android:startColor="?colorPrimaryVariant"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- Secondary blob, center right -->
+    <item android:alpha="0.5">
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerX="0.92"
+                android:centerY="0.42"
+                android:endColor="#00000000"
+                android:gradientRadius="420dp"
+                android:startColor="?colorSecondaryVariant"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- Secondary blob, top right accent -->
+    <item android:alpha="0.4">
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerX="0.85"
+                android:centerY="0.02"
+                android:endColor="#00000000"
+                android:gradientRadius="320dp"
+                android:startColor="?colorSecondaryVariant"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- Primary blob, lower left, wide and faint -->
+    <item android:alpha="0.35">
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerX="0.08"
+                android:centerY="0.88"
+                android:endColor="#00000000"
+                android:gradientRadius="520dp"
+                android:startColor="?colorPrimaryVariant"
+                android:type="radial" />
+        </shape>
+    </item>
+
+</layer-list>

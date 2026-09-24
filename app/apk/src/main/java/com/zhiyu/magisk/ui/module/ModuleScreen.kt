@@ -9,12 +9,16 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,7 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
@@ -31,8 +35,6 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -40,10 +42,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -79,6 +80,9 @@ import com.zhiyu.magisk.ui.component.MagiskDialog
 import com.zhiyu.magisk.ui.component.MarkdownTextAsync
 import com.zhiyu.magisk.ui.component.rememberConfirmDialog
 import com.zhiyu.magisk.ui.component.verticalScrollbar
+import com.zhiyu.magisk.ui.glass.GlassCard
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.utils.textHolder
 import kotlinx.coroutines.launch
 import com.zhiyu.magisk.core.R as CoreR
@@ -96,6 +100,7 @@ fun ModuleScreen(
     val context = LocalContext.current
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
+    val layoutDirection = LocalLayoutDirection.current
 
     val localInstallDialog = rememberConfirmDialog()
     val confirmInstallTitle = stringResource(CoreR.string.confirm_install_title)
@@ -148,11 +153,12 @@ fun ModuleScreen(
         )
     }
 
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            GlassTopAppBar(
                 title = { Text(stringResource(CoreR.string.modules)) },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 scrollBehavior = scrollBehavior
             )
         },
@@ -160,6 +166,12 @@ fun ModuleScreen(
             if (onRegisterFab == null) {
                 FloatingActionButton(
                     onClick = { filePicker.launch("application/zip") },
+                    shape = CircleShape,
+                    modifier = Modifier.border(
+                        0.05.dp,
+                        colorScheme.outline.copy(alpha = 0.5f),
+                        CircleShape
+                    ),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     content = {
@@ -182,7 +194,7 @@ fun ModuleScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@Scaffold
+            return@GlassScreen
         }
 
         if (uiState.modules.isEmpty()) {
@@ -211,7 +223,7 @@ fun ModuleScreen(
                     )
                 }
             }
-            return@Scaffold
+            return@GlassScreen
         }
 
         val listState = rememberLazyListState()
@@ -220,9 +232,19 @@ fun ModuleScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .padding(padding)
-                .verticalScrollbar(listState, contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)),
-            contentPadding = PaddingValues(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 80.dp),
+                .verticalScrollbar(
+                    listState,
+                    contentPadding = PaddingValues(
+                        top = padding.calculateTopPadding() + 4.dp,
+                        bottom = padding.calculateBottomPadding() + 80.dp
+                    )
+                ),
+            contentPadding = PaddingValues(
+                start = padding.calculateStartPadding(layoutDirection) + 12.dp,
+                top = padding.calculateTopPadding() + 4.dp,
+                end = padding.calculateEndPadding(layoutDirection) + 12.dp,
+                bottom = padding.calculateBottomPadding() + 80.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { Spacer(Modifier.height(4.dp)) }
@@ -260,12 +282,11 @@ private fun ModuleCard(
     var expanded by rememberSaveable(item.module.id) { mutableStateOf(false) }
     val hasDescription = item.module.description.isNotBlank()
 
-    Card(
-        onClick = { expanded = !expanded },
-        enabled = hasDescription,
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceContainerLow)
+    GlassCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = hasDescription) { expanded = !expanded },
+        contentPadding = PaddingValues(0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Column(modifier = Modifier.alpha(infoAlpha)) {
@@ -335,7 +356,10 @@ private fun ModuleCard(
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = colorScheme.onSurface.copy(alpha = 0.12f)
+            )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AnimatedVisibility(
@@ -346,6 +370,10 @@ private fun ModuleCard(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (item.showAction) {
                             FilledTonalButton(
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = colorScheme.secondaryContainer.copy(alpha = 0.35f),
+                                    contentColor = colorScheme.onSecondaryContainer
+                                ),
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                                 onClick = { viewModel.runAction(item.module.id, item.module.name) },
                             ) {
@@ -378,7 +406,7 @@ private fun ModuleCard(
                     FilledTonalButton(
                         modifier = Modifier.padding(end = 8.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = colorScheme.tertiaryContainer,
+                            containerColor = colorScheme.tertiaryContainer.copy(alpha = 0.35f),
                             contentColor = colorScheme.onTertiaryContainer
                         ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -403,10 +431,13 @@ private fun ModuleCard(
 
                 FilledTonalButton(
                     colors = if (item.isRemoved) {
-                        ButtonDefaults.filledTonalButtonColors()
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = colorScheme.secondaryContainer.copy(alpha = 0.35f),
+                            contentColor = colorScheme.onSecondaryContainer
+                        )
                     } else {
                         ButtonDefaults.filledTonalButtonColors(
-                            containerColor = colorScheme.errorContainer,
+                            containerColor = colorScheme.errorContainer.copy(alpha = 0.35f),
                             contentColor = colorScheme.onErrorContainer
                         )
                     },

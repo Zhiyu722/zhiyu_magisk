@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    API 31+ (Android 12): real "liquid glass" - the system blurs whatever is behind the
+    dialog window. Only the dialog theme overlay is redeclared here; it inherits every
+    other item from the base declaration in values/themes.xml.
+-->
+<resources>
+
+    <style name="ThemeOverlay.Foundation.Dialog" parent="Base.V23.ThemeOverlay.Foundation.Dialog">
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">24</item>
+    </style>
+
+</resources>

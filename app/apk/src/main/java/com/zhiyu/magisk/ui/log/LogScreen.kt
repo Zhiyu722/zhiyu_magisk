@@ -1,8 +1,7 @@
 package com.zhiyu.magisk.ui.log
 
-import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,13 +19,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Badge
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -36,10 +32,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,8 +43,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +62,11 @@ import com.zhiyu.magisk.core.ktx.toTime
 import com.zhiyu.magisk.core.model.su.SuLog
 import com.zhiyu.magisk.ui.component.rememberExternalStoragePermissionLauncher
 import com.zhiyu.magisk.ui.component.verticalScrollbar
+import com.zhiyu.magisk.ui.glass.GlassDefaults
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
+import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
+import com.zhiyu.magisk.ui.glass.glassTint
 import kotlinx.coroutines.launch
 import com.zhiyu.magisk.core.R as CoreR
 
@@ -89,22 +88,15 @@ fun LogScreen(
         viewModel.saveMagiskLog()
     }
 
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            val colorTransitionFraction = scrollBehavior.state.overlappedFraction
-            val fraction = FastOutLinearInEasing.transform(colorTransitionFraction)
-            val headerContainerColor = lerp(
-                MaterialTheme.colorScheme.surface,
-                MaterialTheme.colorScheme.surfaceContainer,
-                fraction
-            )
-
             Column(
-                modifier = Modifier.background(headerContainerColor)
+                modifier = Modifier.fillMaxWidth()
             ) {
-                TopAppBar(
+                GlassTopAppBar(
                     title = { Text(stringResource(CoreR.string.logs)) },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     actions = {
                         if (pagerState.currentPage == 1) {
                             IconButton(onClick = saveMagiskLog) {
@@ -126,10 +118,6 @@ fun LogScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                    ),
                     scrollBehavior = scrollBehavior
                 )
                 PrimaryTabRow(
@@ -261,62 +249,74 @@ private fun SuLogCard(
         }
     }
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(GlassDefaults.cardShape)
     ) {
-        ListItem(
-            leadingContent = {
-                Image(
-                    painter = rememberDrawablePainter(icon),
-                    contentDescription = log.appName,
-                    modifier = Modifier.size(40.dp)
+        // Log entries are many, so they get the cheap translucent tint instead of a blurred pane;
+        // the tint sits *behind* the content so the log text stays readable.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassTint(
+                    shape = GlassDefaults.cardShape,
+                    dark = LocalGlassDarkTheme.current
                 )
-            },
-            headlineContent = {
-                Text(
-                    text = log.appName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            supportingContent = {
-                Text(
-                    text = uidPidText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            trailingContent = {
-                Column(horizontalAlignment = Alignment.End) {
+        )
+        Column {
+            ListItem(
+                leadingContent = {
+                    Image(
+                        painter = rememberDrawablePainter(icon),
+                        contentDescription = log.appName,
+                        modifier = Modifier.size(40.dp)
+                    )
+                },
+                headlineContent = {
                     Text(
-                        text = log.time.toTime(timeDateFormat),
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        text = log.appName,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        text = uidPidText,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(4.dp))
-                    SuActionBadge(allowed = allowed)
-                }
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-        )
+                },
+                trailingContent = {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = log.time.toTime(timeDateFormat),
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        SuActionBadge(allowed = allowed)
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
 
-        if (details.isNotEmpty()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-            Text(
-                text = details,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-            )
+            if (details.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                )
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                )
+            }
         }
     }
 }
@@ -331,7 +331,7 @@ private fun SuActionBadge(
     val text = if (allowed) stringResource(CoreR.string.granted) else stringResource(CoreR.string.denied)
     Badge(
         modifier = modifier,
-        containerColor = bg,
+        containerColor = bg.copy(alpha = 0.35f),
         contentColor = fg,
     ) {
         Text(
@@ -394,12 +394,21 @@ private fun MagiskLogCard(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        onClick = { expanded = !expanded },
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(GlassDefaults.cardShape)
+            .clickable { expanded = !expanded }
     ) {
+        // Same cheap tint as the SU entries: no blur, and the tint stays behind the log text.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassTint(
+                    shape = GlassDefaults.cardShape,
+                    dark = LocalGlassDarkTheme.current
+                )
+        )
         Column(modifier = Modifier.padding(16.dp)) {
             if (entry.isParsed) {
                 Row(
@@ -463,7 +472,7 @@ private fun LogLevelBadge(
     }
     Badge(
         modifier = modifier,
-        containerColor = bg,
+        containerColor = bg.copy(alpha = 0.35f),
         contentColor = fg,
     ) {
         Text(

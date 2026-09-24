@@ -1,5 +1,8 @@
 package com.zhiyu.magisk.ui.component
 
+import android.annotation.SuppressLint
+import android.os.Build
+import android.view.WindowManager
 import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,13 +36,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.zhiyu.magisk.core.R
 import com.zhiyu.magisk.core.di.ServiceLocator
+import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
+import com.zhiyu.magisk.ui.glass.glassTint
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -232,6 +239,46 @@ fun rememberConfirmDialog(callback: ConfirmCallback): ConfirmDialogHandle {
     return handle
 }
 
+/** Container shape of the glass dialogs. */
+private val GlassDialogShape = RoundedCornerShape(28.dp)
+
+/** Opacity of the translucent dialog container — high enough to keep every text readable. */
+private const val GlassDialogAlpha = 0.88f
+
+/**
+ * Blurs the activity behind the enclosing dialog window on Android 12+. Below that the blur is
+ * silently skipped and the translucent container is what makes the dialog read as glass.
+ *
+ * Must be composed *inside* the dialog window: that is where `LocalView` is the dialog's own
+ * view, whose parent is the [DialogWindowProvider] holding the window to blur.
+ */
+// The blur-behind window flag is simply ignored on Chrome OS, like every other window flag.
+@SuppressLint("UnsupportedChromeOsHardware")
+@Composable
+private fun GlassDialogWindowBlur() {
+    val dialogView = LocalView.current
+    LaunchedEffect(Unit) {
+        val window = (dialogView.parent as? DialogWindowProvider)?.window
+        if (window != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            window.attributes = window.attributes.apply { blurBehindRadius = 24 }
+        }
+    }
+}
+
+/** Adds the frosted glass tint and hairline edge on top of the translucent dialog container. */
+@Composable
+private fun Modifier.glassDialog(): Modifier = glassTint(
+    shape = GlassDialogShape,
+    dark = LocalGlassDarkTheme.current,
+    tint = MaterialTheme.colorScheme.surface
+)
+
+/** Translucent container colour shared by every dialog of this file. */
+@Composable
+private fun glassDialogColor(): Color =
+    MaterialTheme.colorScheme.surface.copy(alpha = GlassDialogAlpha)
+
 @Composable
 fun LoadingDialog(
     visible: Boolean,
@@ -242,11 +289,14 @@ fun LoadingDialog(
             onDismissRequest = {},
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
         ) {
+            GlassDialogWindowBlur()
             Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 6.dp,
-                modifier = modifier.widthIn(max = 320.dp)
+                shape = GlassDialogShape,
+                color = glassDialogColor(),
+                tonalElevation = 0.dp,
+                modifier = modifier
+                    .widthIn(max = 320.dp)
+                    .glassDialog()
             ) {
                 Box(
                     modifier = Modifier.padding(24.dp).fillMaxWidth(),
@@ -292,12 +342,16 @@ fun MagiskDialog(
         modifier = modifier
             .windowInsetsPadding(WindowInsets.systemBars)
             .padding(horizontal = 24.dp, vertical = 24.dp)
-            .widthIn(max = 560.dp),
+            .widthIn(max = 560.dp)
+            .glassDialog(),
         onDismissRequest = onDismissRequest,
-        shape = RoundedCornerShape(28.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = GlassDialogShape,
+        containerColor = glassDialogColor(),
+        tonalElevation = 0.dp,
         title = title,
         text = {
+            // Composed inside the dialog window so the window behind the dialog can be blurred
+            GlassDialogWindowBlur()
             ProvideTextStyle(value = MaterialTheme.typography.bodyMedium) {
                 content()
             }

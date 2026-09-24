@@ -2,6 +2,7 @@ package com.zhiyu.magisk.ui.settings
 
 import android.os.Build
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,15 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,6 +47,9 @@ import com.zhiyu.magisk.ui.component.SettingsDropdown
 import com.zhiyu.magisk.ui.component.SettingsSwitch
 import com.zhiyu.magisk.ui.component.SmallTitle
 import com.zhiyu.magisk.ui.component.verticalScrollbar
+import com.zhiyu.magisk.ui.glass.GlassCard
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.core.R as CoreR
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,11 +60,12 @@ fun SettingsScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val scrollState = rememberScrollState()
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            GlassTopAppBar(
                 title = { Text(stringResource(CoreR.string.settings)) },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 scrollBehavior = scrollBehavior
             )
         }
@@ -103,11 +104,7 @@ private fun CustomizationSection(
     val context = LocalContext.current
 
     SmallTitle(text = stringResource(CoreR.string.settings_customization))
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    SettingsGroupCard(modifier = modifier) {
         if (LocaleSetting.useLocaleManager) {
             val locale = LocaleSetting.instance.appLocale
             val summary = locale?.getDisplayName(locale) ?: stringResource(CoreR.string.system_default)
@@ -135,10 +132,7 @@ private fun CustomizationSection(
             )
         }
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Color Mode
         val isDynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -169,10 +163,7 @@ private fun CustomizationSection(
         )
 
         if (isRunningAsStub && ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
             SettingsArrow(
                 title = stringResource(CoreR.string.add_shortcut_title),
                 summary = stringResource(CoreR.string.setting_add_shortcut_summary),
@@ -191,11 +182,7 @@ private fun AppSettingsSection(
     val resources = LocalResources.current
 
     SmallTitle(text = stringResource(CoreR.string.home_app_title))
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    SettingsGroupCard(modifier = modifier) {
         // Update Channel
         val updateChannelEntries = remember {
             resources.getStringArray(CoreR.array.update_channel).toList()
@@ -221,10 +208,7 @@ private fun AppSettingsSection(
 
         // Update Channel URL (for custom channel)
         if (updateChannel == Config.Value.CUSTOM_CHANNEL) {
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
             if (showUrlDialog) {
                 UpdateChannelUrlDialog(
                     onDismiss = { showUrlDialog = false }
@@ -237,10 +221,7 @@ private fun AppSettingsSection(
             )
         }
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // DoH Toggle
         var doh by remember { mutableStateOf(Config.doh) }
@@ -254,10 +235,7 @@ private fun AppSettingsSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Update Checker
         var checkUpdate by remember { mutableStateOf(Config.checkUpdate) }
@@ -271,10 +249,7 @@ private fun AppSettingsSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Download Path
         var showDownloadDialog by remember { mutableStateOf(false) }
@@ -291,10 +266,7 @@ private fun AppSettingsSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Random Package Name
         var randName by remember { mutableStateOf(Config.randName) }
@@ -318,11 +290,7 @@ private fun MagiskSection(
     modifier: Modifier = Modifier
 ) {
     SmallTitle(text = stringResource(CoreR.string.magisk))
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    SettingsGroupCard(modifier = modifier) {
         // Systemless Hosts
         SettingsArrow(
             title = stringResource(CoreR.string.settings_hosts_title),
@@ -331,10 +299,7 @@ private fun MagiskSection(
         )
 
         if (Const.Version.atLeast_24_0()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
 
             // Zygisk
             var zygisk by remember { mutableStateOf(Config.zygisk) }
@@ -352,10 +317,7 @@ private fun MagiskSection(
                 }
             )
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
 
             // DenyList
             val denyListEnabled by viewModel.denyListEnabled.collectAsStateWithLifecycle()
@@ -366,10 +328,7 @@ private fun MagiskSection(
                 onCheckedChange = { viewModel.toggleDenyList(it) }
             )
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
 
             // DenyList Config
             SettingsArrow(
@@ -391,11 +350,7 @@ private fun SuperuserSection(
     val resources = LocalResources.current
 
     SmallTitle(text = stringResource(CoreR.string.superuser))
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    SettingsGroupCard(modifier = modifier) {
         // Tapjack (SDK < S)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             var tapjack by remember { mutableStateOf(Config.suTapjack) }
@@ -408,10 +363,7 @@ private fun SuperuserSection(
                     Config.suTapjack = it
                 }
             )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
         }
 
         // Authentication
@@ -432,10 +384,7 @@ private fun SuperuserSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Access Mode
         val accessEntries = remember {
@@ -452,10 +401,7 @@ private fun SuperuserSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Multiuser Mode
         val multiuserEntries = remember {
@@ -477,10 +423,7 @@ private fun SuperuserSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Mount Namespace Mode
         val namespaceEntries = remember {
@@ -501,10 +444,7 @@ private fun SuperuserSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Automatic Response
         val autoResponseEntries = remember {
@@ -524,10 +464,7 @@ private fun SuperuserSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // Request Timeout
         val timeoutEntries = remember {
@@ -547,10 +484,7 @@ private fun SuperuserSection(
             }
         )
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        SectionDivider()
 
         // SU Notification
         val notifEntries = remember {
@@ -569,10 +503,7 @@ private fun SuperuserSection(
 
         // Reauthenticate (SDK < O)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
             var reAuth by remember { mutableStateOf(Config.suReAuth) }
             SettingsSwitch(
                 title = stringResource(CoreR.string.settings_su_reauth_title),
@@ -587,10 +518,7 @@ private fun SuperuserSection(
 
         // Restrict (version >= 30.1)
         if (Const.Version.atLeast_30_1()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            SectionDivider()
             var restrict by remember { mutableStateOf(Config.suRestrict) }
             SettingsSwitch(
                 title = stringResource(CoreR.string.settings_su_restrict_title),
@@ -603,6 +531,33 @@ private fun SuperuserSection(
             )
         }
     }
+}
+
+/** One frosted glass card holding a settings group; rows are separated by [SectionDivider]. */
+@Composable
+private fun SettingsGroupCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    GlassCard(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            content = content
+        )
+    }
+}
+
+/** Hairline separator between the rows of one settings glass card. */
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    )
 }
 
 // --- Dialogs ---

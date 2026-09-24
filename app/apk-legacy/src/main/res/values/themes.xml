@@ -2,20 +2,40 @@
 <resources>
 
     <style name="Base.V23.Theme.Foundation.Light" parent="Theme.MaterialComponents.Light.NoActionBar">
-        <item name="android:windowBackground">?colorSurface</item>
+        <item name="android:windowBackground">@drawable/backdrop_glass</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="dialogTheme">@style/ThemeOverlay.Foundation.Dialog</item>
-        <item name="android:statusBarColor">#40bdbdbd</item>
+        <!-- Translucent system bars: the colorful backdrop is drawn edge to edge behind them.
+             The navigation bar keeps a dark scrim because windowLightNavigationBar needs API 27. -->
+        <item name="android:statusBarColor">#00000000</item>
         <item name="android:navigationBarColor">#38000000</item>
         <item name="android:windowLightStatusBar">true</item>
+
+        <!--region Glassmorphism defaults (light)-->
+        <item name="colorBackdropBase">#FFE9EEFA</item>
+        <item name="colorBackdropBaseAlt">#FFEDE7F7</item>
+        <item name="colorGlassSurface">#B3FFFFFF</item>
+        <item name="colorGlassHighlight">#59FFFFFF</item>
+        <item name="colorGlassBorder">#66FFFFFF</item>
+        <item name="colorGlassIndicator">#4DFFFFFF</item>
+        <!--endregion-->
     </style>
 
     <style name="Base.V23.Theme.Foundation" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="android:windowBackground">?colorSurface</item>
+        <item name="android:windowBackground">@drawable/backdrop_glass</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="dialogTheme">@style/ThemeOverlay.Foundation.Dialog</item>
-        <item name="android:statusBarColor">#60000000</item>
-        <item name="android:navigationBarColor">#60000000</item>
+        <item name="android:statusBarColor">#00000000</item>
+        <item name="android:navigationBarColor">#00000000</item>
+
+        <!--region Glassmorphism defaults (dark)-->
+        <item name="colorBackdropBase">#FF05070F</item>
+        <item name="colorBackdropBaseAlt">#FF0A0618</item>
+        <item name="colorGlassSurface">#1FFFFFFF</item>
+        <item name="colorGlassHighlight">#14FFFFFF</item>
+        <item name="colorGlassBorder">#33FFFFFF</item>
+        <item name="colorGlassIndicator">#33FFFFFF</item>
+        <!--endregion-->
     </style>
 
     <style name="Theme.Foundation.Light" parent="Base.V23.Theme.Foundation.Light" />
@@ -25,6 +45,11 @@
     <style name="Base.V23.ThemeOverlay.Foundation.Dialog" parent="ThemeOverlay.MaterialComponents.Dialog">
         <item name="android:windowMinWidthMajor">@dimen/abc_dialog_min_width_major</item>
         <item name="android:windowMinWidthMinor">@dimen/abc_dialog_min_width_minor</item>
+        <!-- Rounded glass window background; MagiskDialog overrides this with its own
+             translucent MaterialShapeDrawable, other dialogs use it directly. -->
+        <item name="android:windowBackground">@drawable/glass_dialog_background</item>
+        <!-- Softer dim so the translucent dialog does not turn into a solid slab. -->
+        <item name="android:backgroundDimAmount">0.45</item>
     </style>
 
     <style name="ThemeOverlay.Foundation.Dialog" parent="Base.V23.ThemeOverlay.Foundation.Dialog" />

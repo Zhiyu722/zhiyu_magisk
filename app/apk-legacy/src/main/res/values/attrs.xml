@@ -10,6 +10,14 @@
     <attr name="colorOnSurfaceVariant" format="color" />
     <attr name="colorSurfaceSurfaceVariant" format="color" />
 
+    <!--Glassmorphism-->
+    <attr name="colorBackdropBase" format="color" />
+    <attr name="colorBackdropBaseAlt" format="color" />
+    <attr name="colorGlassSurface" format="color" />
+    <attr name="colorGlassHighlight" format="color" />
+    <attr name="colorGlassBorder" format="color" />
+    <attr name="colorGlassIndicator" format="color" />
+
     <!--endregion-->
 
     <declare-styleable name="ConcealableView">

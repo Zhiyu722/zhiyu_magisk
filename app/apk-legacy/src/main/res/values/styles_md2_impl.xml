@@ -18,9 +18,12 @@
     <style name="WidgetFoundation.Card" parent="Widget.MaterialComponents.CardView">
         <item name="android:focusable">auto</item>
         <item name="cardBackgroundColor">?colorSurfaceVariant</item>
-        <item name="cardCornerRadius">@dimen/l_50</item>
+        <item name="cardCornerRadius">@dimen/glass_corner</item>
         <item name="cardElevation">0dp</item>
         <item name="cardPreventCornerOverlap">false</item>
+        <!--Glassmorphism: hairline light rim, the fill stays translucent (see themes_md2.xml).-->
+        <item name="strokeColor">?colorGlassBorder</item>
+        <item name="strokeWidth">@dimen/glass_border</item>
     </style>
 
     <style name="WidgetFoundation.Card.Primary">
@@ -29,8 +32,25 @@
 
     <style name="WidgetFoundation.Card.Elevated">
         <item name="cardBackgroundColor">?colorSurfaceSurfaceVariant</item>
-        <item name="cardCornerRadius">@dimen/l_50</item>
+        <item name="cardCornerRadius">@dimen/glass_corner</item>
         <item name="cardElevation">@dimen/l_125</item>
+        <item name="strokeColor">?colorGlassBorder</item>
+        <item name="strokeWidth">@dimen/glass_border</item>
+    </style>
+
+
+    <!--Pill shaped active indicator of the floating glass bottom navigation.-->
+    <style name="WidgetFoundation.Navigation.ActiveIndicator" parent="">
+        <item name="android:width">64dp</item>
+        <item name="android:height">32dp</item>
+        <item name="marginHorizontal">12dp</item>
+        <item name="android:color">?colorGlassIndicator</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.Foundation.Pill</item>
+    </style>
+
+    <style name="ShapeAppearance.Foundation.Pill" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
     </style>
 
 

@@ -3,43 +3,72 @@ package com.zhiyu.magisk.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ShortNavigationBar
-import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zhiyu.magisk.R
 import com.zhiyu.magisk.arch.VMFactory
 import com.zhiyu.magisk.core.Info
 import com.zhiyu.magisk.core.model.module.LocalModule
+import com.zhiyu.magisk.ui.glass.GlassBackdropHolderProvider
+import com.zhiyu.magisk.ui.glass.GlassDefaults
+import com.zhiyu.magisk.ui.glass.GlassSurface
+import com.zhiyu.magisk.ui.glass.LocalGlassBackdrop
+import com.zhiyu.magisk.ui.glass.LocalGlassBackdropHolder
+import com.zhiyu.magisk.ui.glass.currentBackdrop
 import com.zhiyu.magisk.ui.home.HomeScreen
 import com.zhiyu.magisk.ui.home.HomeViewModel
 import com.zhiyu.magisk.ui.install.InstallViewModel
@@ -72,7 +101,6 @@ fun MainScreen(
     onAuthenticate: ((onSuccess: () -> Unit) -> Unit)? = null,
 ) {
     val navigator = LocalNavigator.current
-    val scope = rememberCoroutineScope()
     val visibleTabs = remember {
         Tab.entries.filter { tab ->
             when (tab) {
@@ -87,114 +115,246 @@ fun MainScreen(
     var moduleFabAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val isModulesTab = visibleTabs.getOrNull(pagerState.currentPage) == Tab.MODULES
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            ShortNavigationBar {
-                visibleTabs.forEachIndexed { index, tab ->
-                    ShortNavigationBarItem(
-                        selected = pagerState.currentPage == index,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(tab.iconRes),
-                                contentDescription = stringResource(tab.titleRes),
-                            )
-                        },
-                        label = { Text(stringResource(tab.titleRes)) },
-                    )
+    // Publishes the backdrop and scroll level of the currently visible tab, so the floating
+    // navigation bar below — which lives outside every screen — can frost up with it.
+    GlassBackdropHolderProvider {
+        Scaffold(
+            modifier = modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                // Kept in the Scaffold's slot: the tab content keeps the bottom inset v31.0
+                // gives it (no screen content hides behind the bar) and the FAB, which the
+                // Scaffold positions above the bottom bar, keeps floating above the pill.
+                FloatingNavigationBar(
+                    pagerState = pagerState,
+                    visibleTabs = visibleTabs
+                )
+            },
+            floatingActionButton = {
+                AnimatedVisibility(
+                    visible = isModulesTab && moduleFabAction != null,
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut(),
+                ) {
+                    FloatingActionButton(
+                        onClick = { moduleFabAction?.invoke() },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(CoreR.string.module_action_install_external),
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
                 }
             }
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = isModulesTab && moduleFabAction != null,
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut(),
+        ) { innerPadding ->
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding),
+                beyondViewportPageCount = visibleTabs.size - 1,
+                userScrollEnabled = true,
+            ) { page ->
+                val isCurrentPage = pagerState.currentPage == page
+                when (visibleTabs[page]) {
+                    Tab.HOME -> {
+                        val vm: HomeViewModel = viewModel(factory = VMFactory)
+                        val installVm: InstallViewModel = viewModel(factory = VMFactory)
+                        LaunchedEffect(isCurrentPage) {
+                            if (isCurrentPage) vm.startLoading()
+                        }
+                        CollectNavEvents(vm, navigator)
+                        CollectNavEvents(installVm, navigator)
+                        HomeScreen(vm, installVm)
+                    }
+                    Tab.SUPERUSER -> {
+                        val activity = LocalActivity.current as? ComponentActivity
+                        val vm: SuperuserViewModel = superuserViewModel
+                            ?: if (activity != null) {
+                                viewModel(viewModelStoreOwner = activity, factory = VMFactory)
+                            } else {
+                                viewModel(factory = VMFactory)
+                            }
+                        LaunchedEffect(onAuthenticate) {
+                            if (onAuthenticate != null) {
+                                vm.authenticate = onAuthenticate
+                            }
+                        }
+                        LaunchedEffect(isCurrentPage) {
+                            if (isCurrentPage) vm.startLoading()
+                        }
+                        SuperuserScreen(vm)
+                    }
+                    Tab.LOG -> {
+                        val vm: LogViewModel = viewModel(factory = VMFactory)
+                        LaunchedEffect(isCurrentPage) {
+                            if (isCurrentPage) vm.startLoading()
+                        }
+                        LogScreen(vm)
+                    }
+                    Tab.MODULES -> {
+                        val vm: ModuleViewModel = viewModel(factory = VMFactory)
+                        LaunchedEffect(isCurrentPage) {
+                            if (isCurrentPage) vm.startLoading()
+                        }
+                        CollectNavEvents(vm, navigator)
+                        ModuleScreen(
+                            viewModel = vm,
+                            onRegisterFab = { moduleFabAction = it },
+                        )
+                    }
+                    Tab.SETTINGS -> {
+                        val vm: SettingsViewModel = viewModel(factory = VMFactory)
+                        LaunchedEffect(onAuthenticate) {
+                            if (onAuthenticate != null) {
+                                vm.authenticate = onAuthenticate
+                            }
+                        }
+                        CollectNavEvents(vm, navigator)
+                        SettingsScreen(vm)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The floating navigation bar, turned into a frosted glass pill.
+ *
+ * It is composed in the [Scaffold]'s `bottomBar` slot, i.e. *after* the pager content, so it can
+ * sample the backdrop published by the currently visible tab — that is what the
+ * [GlassBackdropHolderProvider] around the screen is for. The pill tucks itself away while swiping
+ * between pages and frosts up as the visible tab is scrolled, so its labels never fight with the
+ * content.
+ */
+@Composable
+private fun FloatingNavigationBar(
+    pagerState: PagerState,
+    visibleTabs: List<Tab>,
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    val shape = GlassDefaults.chromeShape
+    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // The floating bar lives outside the screen it blurs, so it borrows the backdrop
+    // published by the currently visible tab.
+    val backdrop = currentBackdrop()
+    val holder = LocalGlassBackdropHolder.current
+
+    val swiping = pagerState.isScrollInProgress
+    val navScale by animateFloatAsState(if (swiping) 0.96f else 1f, label = "navScale")
+    val frost = holder?.frost ?: 0f
+    val body = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f + 0.30f * frost)
+
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
+        GlassSurface(
+            modifier = modifier
+                .padding(bottom = navBarInset + 12.dp, start = 20.dp, end = 20.dp)
+                .graphicsLayer {
+                    scaleX = navScale
+                    scaleY = navScale
+                }
+                .shadow(elevation = 10.dp, shape = shape, clip = false)
+                .fillMaxWidth()
+                .height(68.dp),
+            shape = shape,
+            blurRadius = GlassDefaults.chromeBlur * (0.6f + 0.4f * frost),
+            refraction = GlassDefaults.noRefraction,
+            body = body
+        ) {
+            Row(
+                modifier = Modifier
+                    // fillMaxSize() (not matchParentSize()) so the row actually gets the
+                    // 68.dp height of the pill instead of being measured to zero.
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                FloatingActionButton(
-                    onClick = { moduleFabAction?.invoke() },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(CoreR.string.module_action_install_external),
-                        modifier = Modifier.size(28.dp),
+                visibleTabs.forEachIndexed { index, tab ->
+                    FloatingNavItem(
+                        icon = ImageVector.vectorResource(tab.iconRes),
+                        label = stringResource(tab.titleRes),
+                        selected = pagerState.currentPage == index,
+                        enabled = true,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
-    ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
+    }
+}
+
+@Composable
+private fun FloatingNavItem(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val contentColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = tween(200),
+        label = "navItemColor"
+    )
+
+    val pillColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(220),
+        label = "navItemPill"
+    )
+
+    Box(
+        modifier = modifier
+            .clickable(
+                enabled = enabled,
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Soft glassy highlight behind the active tab
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding),
-            beyondViewportPageCount = visibleTabs.size - 1,
-            userScrollEnabled = true,
-        ) { page ->
-            val isCurrentPage = pagerState.currentPage == page
-            when (visibleTabs[page]) {
-                Tab.HOME -> {
-                    val vm: HomeViewModel = viewModel(factory = VMFactory)
-                    val installVm: InstallViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(isCurrentPage) {
-                        if (isCurrentPage) vm.startLoading()
-                    }
-                    CollectNavEvents(vm, navigator)
-                    CollectNavEvents(installVm, navigator)
-                    HomeScreen(vm, installVm)
-                }
-                Tab.SUPERUSER -> {
-                    val activity = LocalActivity.current as? ComponentActivity
-                    val vm: SuperuserViewModel = superuserViewModel
-                        ?: if (activity != null) {
-                            viewModel(viewModelStoreOwner = activity, factory = VMFactory)
-                        } else {
-                            viewModel(factory = VMFactory)
-                        }
-                    LaunchedEffect(onAuthenticate) {
-                        if (onAuthenticate != null) {
-                            vm.authenticate = onAuthenticate
-                        }
-                    }
-                    LaunchedEffect(isCurrentPage) {
-                        if (isCurrentPage) vm.startLoading()
-                    }
-                    SuperuserScreen(vm)
-                }
-                Tab.LOG -> {
-                    val vm: LogViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(isCurrentPage) {
-                        if (isCurrentPage) vm.startLoading()
-                    }
-                    LogScreen(vm)
-                }
-                Tab.MODULES -> {
-                    val vm: ModuleViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(isCurrentPage) {
-                        if (isCurrentPage) vm.startLoading()
-                    }
-                    CollectNavEvents(vm, navigator)
-                    ModuleScreen(
-                        viewModel = vm,
-                        onRegisterFab = { moduleFabAction = it },
-                    )
-                }
-                Tab.SETTINGS -> {
-                    val vm: SettingsViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(onAuthenticate) {
-                        if (onAuthenticate != null) {
-                            vm.authenticate = onAuthenticate
-                        }
-                    }
-                    CollectNavEvents(vm, navigator)
-                    SettingsScreen(vm)
-                }
-            }
+                .matchParentSize()
+                .clip(RoundedCornerShape(20.dp))
+                .background(pillColor)
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(24.dp),
+                tint = contentColor,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                color = contentColor,
+            )
         }
     }
 }

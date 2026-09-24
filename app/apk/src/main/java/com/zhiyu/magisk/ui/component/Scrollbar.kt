@@ -344,7 +344,8 @@ fun Modifier.verticalScrollbar(
 ): Modifier = composed {
     val layoutDirection = LocalLayoutDirection.current
     val coroutineScope = rememberCoroutineScope()
-    val resolvedThumbColor = thumbColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+    // Glassy translucent thumb: never fully opaque, so the glass content stays visible underneath
+    val resolvedThumbColor = thumbColor ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
 
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
@@ -487,7 +488,8 @@ fun Modifier.horizontalScrollbar(
 ): Modifier = composed {
     val layoutDirection = LocalLayoutDirection.current
     val coroutineScope = rememberCoroutineScope()
-    val resolvedThumbColor = thumbColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+    // Glassy translucent thumb: never fully opaque, so the glass content stays visible underneath
+    val resolvedThumbColor = thumbColor ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
 
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }

@@ -47,8 +47,11 @@
         <item name="colorPrimaryVariant">#804EAFF5</item>
         <item name="colorSecondary">#3E78AF</item>
         <item name="colorSecondaryVariant">#803E78AF</item>
-        <item name="colorSurface">#F9F9F9</item>
-        <item name="colorSurfaceVariant">#EEEEEE</item>
+        <!-- Translucent surfaces: the colorful window backdrop (@drawable/backdrop_glass)
+             stays visible through every card / container / dialog. Roughly 80% opaque, which
+             keeps ?colorOnSurface text readable on top of the gradient. -->
+        <item name="colorSurface">#CCF9F9F9</item>
+        <item name="colorSurfaceVariant">#B8EEEEEE</item>
         <item name="colorSurfaceSurfaceVariant">?colorSurface</item>
         <item name="colorOnPrimary">#F9F9F9</item>
         <item name="colorOnPrimaryVariant">#D9E6E6E6</item>
@@ -60,14 +63,27 @@
         <item name="colorOnSurfaceVariant">#BF444444</item>
         <item name="colorDisabled">#808080</item>
         <item name="colorDisabledVariant">#66808080</item>
+        <!--region Glassmorphism-->
+        <item name="colorBackdropBase">#FFE9EEFA</item>
+        <item name="colorBackdropBaseAlt">#FFEDE7F7</item>
+        <item name="colorGlassSurface">#B3FFFFFF</item>
+        <item name="colorGlassHighlight">#59FFFFFF</item>
+        <item name="colorGlassBorder">#66FFFFFF</item>
+        <item name="colorGlassIndicator">#4DFFFFFF</item>
+        <!--endregion-->
     </style>
 
     <style name="ThemeFoundationMD2.Amoled" parent="ThemeFoundationMD2.Piplup">
-        <item name="colorSurface">#FFF</item>
+        <item name="colorSurface">#CCFFFFFF</item>
+        <item name="colorSurfaceVariant">#B8F7F7F7</item>
         <item name="colorOnPrimary">#FFF</item>
         <item name="colorOnSecondary">#FFF</item>
         <item name="colorOnBackground">#FFF</item>
         <item name="colorOnError">#FFF</item>
+        <!--AMOLED stays as bright / neutral as possible, only the backdrop gets tinted.-->
+        <item name="colorBackdropBase">#FFFBFBFE</item>
+        <item name="colorBackdropBaseAlt">#FFF5F5FA</item>
+        <item name="colorGlassSurface">#A6FFFFFF</item>
     </style>
 
     <style name="ThemeFoundationMD2.Rayquaza" parent="ThemeFoundationMD2.Piplup">

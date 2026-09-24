@@ -7,9 +7,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zhiyu.magisk.R
 import com.zhiyu.magisk.ui.component.rememberExternalStoragePermissionLauncher
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.ui.terminal.TerminalScreen
 import com.zhiyu.magisk.core.R as CoreR
 
@@ -38,11 +38,12 @@ fun ActionScreen(
     }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            GlassTopAppBar(
                 title = { Text(actionName) },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 navigationIcon = {
                     IconButton(
                         onClick = onBack

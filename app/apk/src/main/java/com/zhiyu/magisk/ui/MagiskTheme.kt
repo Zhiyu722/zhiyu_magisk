@@ -12,6 +12,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,6 +32,7 @@ import com.google.android.material.color.utilities.MaterialDynamicColors
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.zhiyu.magisk.core.Config
 import com.zhiyu.magisk.core.model.ColorMode
+import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
 
 @SuppressLint("RestrictedApi")
 fun dynamicColorScheme(
@@ -213,6 +215,9 @@ fun MagiskTheme(
         colorScheme = colorScheme,
         shapes = MagiskShapes,
         typography = MagiskTypography,
-        content = content
+        content = {
+            // Glass surfaces need to know whether the active theme is dark
+            CompositionLocalProvider(LocalGlassDarkTheme provides isDarkTheme, content = content)
+        }
     )
 }

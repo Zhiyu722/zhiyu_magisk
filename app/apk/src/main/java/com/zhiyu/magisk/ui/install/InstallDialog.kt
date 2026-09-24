@@ -11,23 +11,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +47,9 @@ import com.zhiyu.magisk.ui.component.SettingsArrow
 import com.zhiyu.magisk.ui.component.SettingsSwitch
 import com.zhiyu.magisk.ui.component.rememberConfirmDialog
 import com.zhiyu.magisk.ui.component.verticalScrollbar
+import com.zhiyu.magisk.ui.glass.GlassCard
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.core.R as CoreR
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,11 +113,12 @@ fun InstallDialog(
             )
         ) {
             val scrollState = rememberScrollState()
-            Scaffold(
+            GlassScreen(
                 modifier = modifier.fillMaxSize(),
                 topBar = {
-                    TopAppBar(
+                    GlassTopAppBar(
                         title = { Text(stringResource(CoreR.string.install)) },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         navigationIcon = {
                             IconButton(onClick = onDismiss) {
                                 Icon(
@@ -128,10 +126,7 @@ fun InstallDialog(
                                     contentDescription = stringResource(android.R.string.cancel)
                                 )
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
+                        }
                     )
                 }
             ) { innerPadding ->
@@ -152,48 +147,48 @@ fun InstallDialog(
                         InstallOptionsSection()
                     }
 
-                    Card(
+                    GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
+                        contentPadding = PaddingValues(0.dp)
                     ) {
-                        SettingsArrow(
-                            title = stringResource(CoreR.string.select_patch_file),
-                            onClick = {
-                                onDismiss()
-                                installVm.selectMethod(InstallViewModel.Method.PATCH)
-                            },
-                        )
-
-                        SettingsArrow(
-                            title = stringResource(CoreR.string.download_patch_file),
-                            onClick = {
-                                onDismiss()
-                                installVm.selectMethod(InstallViewModel.Method.DOWNLOAD)
-                            },
-                        )
-
-                        if (installVm.isRooted) {
+                        // The card content is a Box, so the rows are stacked explicitly
+                        Column {
                             SettingsArrow(
-                                title = stringResource(CoreR.string.direct_install),
+                                title = stringResource(CoreR.string.select_patch_file),
                                 onClick = {
                                     onDismiss()
-                                    installVm.selectMethod(InstallViewModel.Method.DIRECT)
-                                    installVm.install()
+                                    installVm.selectMethod(InstallViewModel.Method.PATCH)
                                 },
                             )
-                        }
 
-                        if (!installVm.noSecondSlot) {
                             SettingsArrow(
-                                title = stringResource(CoreR.string.install_inactive_slot),
+                                title = stringResource(CoreR.string.download_patch_file),
                                 onClick = {
                                     onDismiss()
-                                    installVm.selectMethod(InstallViewModel.Method.INACTIVE_SLOT)
+                                    installVm.selectMethod(InstallViewModel.Method.DOWNLOAD)
                                 },
                             )
+
+                            if (installVm.isRooted) {
+                                SettingsArrow(
+                                    title = stringResource(CoreR.string.direct_install),
+                                    onClick = {
+                                        onDismiss()
+                                        installVm.selectMethod(InstallViewModel.Method.DIRECT)
+                                        installVm.install()
+                                    },
+                                )
+                            }
+
+                            if (!installVm.noSecondSlot) {
+                                SettingsArrow(
+                                    title = stringResource(CoreR.string.install_inactive_slot),
+                                    onClick = {
+                                        onDismiss()
+                                        installVm.selectMethod(InstallViewModel.Method.INACTIVE_SLOT)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -206,43 +201,45 @@ fun InstallDialog(
 private fun InstallOptionsSection(
     modifier: Modifier = Modifier
 ) {
-    Card(
+    GlassCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        contentPadding = PaddingValues(0.dp)
     ) {
-        if (!Info.isSAR) {
-            var keepVerity by remember { mutableStateOf(Config.keepVerity) }
-            SettingsSwitch(
-                title = stringResource(CoreR.string.keep_dm_verity),
-                checked = keepVerity,
-                onCheckedChange = {
-                    keepVerity = it
-                    Config.keepVerity = it
-                }
-            )
-        }
-        if (Info.isFDE) {
-            var keepEnc by remember { mutableStateOf(Config.keepEnc) }
-            SettingsSwitch(
-                title = stringResource(CoreR.string.keep_force_encryption),
-                checked = keepEnc,
-                onCheckedChange = {
-                    keepEnc = it
-                    Config.keepEnc = it
-                }
-            )
-        }
-        if (!Info.ramdisk) {
-            var recovery by remember { mutableStateOf(Config.recovery) }
-            SettingsSwitch(
-                title = stringResource(CoreR.string.recovery_mode),
-                checked = recovery,
-                onCheckedChange = {
-                    recovery = it
-                    Config.recovery = it
-                }
-            )
+        // The card content is a Box, so the switches are stacked explicitly
+        Column {
+            if (!Info.isSAR) {
+                var keepVerity by remember { mutableStateOf(Config.keepVerity) }
+                SettingsSwitch(
+                    title = stringResource(CoreR.string.keep_dm_verity),
+                    checked = keepVerity,
+                    onCheckedChange = {
+                        keepVerity = it
+                        Config.keepVerity = it
+                    }
+                )
+            }
+            if (Info.isFDE) {
+                var keepEnc by remember { mutableStateOf(Config.keepEnc) }
+                SettingsSwitch(
+                    title = stringResource(CoreR.string.keep_force_encryption),
+                    checked = keepEnc,
+                    onCheckedChange = {
+                        keepEnc = it
+                        Config.keepEnc = it
+                    }
+                )
+            }
+            if (!Info.ramdisk) {
+                var recovery by remember { mutableStateOf(Config.recovery) }
+                SettingsSwitch(
+                    title = stringResource(CoreR.string.recovery_mode),
+                    checked = recovery,
+                    onCheckedChange = {
+                        recovery = it
+                        Config.recovery = it
+                    }
+                )
+            }
         }
     }
 }

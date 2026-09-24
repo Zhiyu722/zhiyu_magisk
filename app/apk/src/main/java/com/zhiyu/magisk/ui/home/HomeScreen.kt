@@ -39,8 +39,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,9 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -94,6 +90,12 @@ import com.zhiyu.magisk.ui.component.MarkdownTextAsync
 import com.zhiyu.magisk.ui.component.rememberLoadingDialog
 import com.zhiyu.magisk.ui.component.verticalScrollbar
 import com.zhiyu.magisk.ui.flash.FlashUtils
+import com.zhiyu.magisk.ui.glass.GlassCard
+import com.zhiyu.magisk.ui.glass.GlassDefaults
+import com.zhiyu.magisk.ui.glass.GlassScreen
+import com.zhiyu.magisk.ui.glass.GlassTopAppBar
+import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
+import com.zhiyu.magisk.ui.glass.glassTint
 import com.zhiyu.magisk.ui.install.InstallDialog
 import com.zhiyu.magisk.ui.install.InstallViewModel
 import kotlinx.coroutines.launch
@@ -246,11 +248,12 @@ fun HomeScreen(
 
     val scrollState = rememberScrollState()
 
-    Scaffold(
+    GlassScreen(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            GlassTopAppBar(
                 title = { Text(stringResource(CoreR.string.section_home)) },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 scrollBehavior = scrollBehavior,
                 actions = {
                     if (Info.env.isActive) {
@@ -380,7 +383,7 @@ private fun RebootButton(
                 if (isSafeMode) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                     )
                 }
                 DropdownMenuItem(
@@ -424,10 +427,18 @@ private fun NoticeCard(
     onHide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f),
+                GlassDefaults.cardShape
+            )
+            .glassTint(
+                shape = GlassDefaults.cardShape,
+                dark = LocalGlassDarkTheme.current,
+                tint = MaterialTheme.colorScheme.tertiaryContainer
+            )
     ) {
         Row(
             modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
@@ -507,11 +518,7 @@ private fun CoreCard(
         HomeViewModel.State.LOADING -> null
     }
 
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
+    GlassCard(modifier = modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -580,11 +587,7 @@ private fun AppCard(
         else -> null
     }
 
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
+    GlassCard(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -694,11 +697,7 @@ private fun StatusCard(
         )
     )
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
+    GlassCard(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -729,7 +728,7 @@ private fun StatusCard(
                     VerticalDivider(
                         thickness = 0.5.dp,
                         modifier = Modifier.padding(vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                     )
                 }
             }
@@ -742,11 +741,7 @@ private fun SupportCard(
     onLinkClicked: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
+    GlassCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
                 text = stringResource(CoreR.string.home_support_content),
@@ -826,11 +821,7 @@ private fun DevelopersCard(
     onLinkClicked: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
+    GlassCard(modifier = modifier.fillMaxWidth()) {
         Column {
             developers.forEachIndexed { index, dev ->
                 Row(
@@ -862,7 +853,7 @@ private fun DevelopersCard(
                     HorizontalDivider(
                         thickness = 0.5.dp,
                         modifier = Modifier.padding(horizontal = 18.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                     )
                 }
             }

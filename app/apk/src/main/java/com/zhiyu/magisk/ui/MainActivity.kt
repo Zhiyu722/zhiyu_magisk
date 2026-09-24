@@ -11,6 +11,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -81,6 +82,9 @@ class MainActivity : ComponentActivity(), SplashScreenHost {
         extension.onCreate(savedInstanceState)
         splashController.preOnCreate()
         theme.applyStyle(R.style.Main, true)
+        // The glass UI draws its own colourful backdrop, so the app goes edge to edge and
+        // lets the background flow behind the system bars.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         splashController.onCreate(savedInstanceState)
     }
