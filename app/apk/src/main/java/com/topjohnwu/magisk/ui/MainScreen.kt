@@ -1,46 +1,40 @@
 package com.topjohnwu.magisk.ui
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.topjohnwu.magisk.R
 import com.topjohnwu.magisk.arch.VMFactory
@@ -71,8 +65,14 @@ enum class Tab(val titleRes: Int, val iconRes: Int) {
 }
 
 @Composable
-fun MainScreen(initialTab: Int = Tab.HOME.ordinal) {
+fun MainScreen(
+    modifier: Modifier = Modifier,
+    initialTab: Int = Tab.HOME.ordinal,
+    superuserViewModel: SuperuserViewModel? = null,
+    onAuthenticate: ((onSuccess: () -> Unit) -> Unit)? = null,
+) {
     val navigator = LocalNavigator.current
+    val scope = rememberCoroutineScope()
     val visibleTabs = remember {
         Tab.entries.filter { tab ->
             when (tab) {
@@ -84,51 +84,111 @@ fun MainScreen(initialTab: Int = Tab.HOME.ordinal) {
     }
     val initialPage = visibleTabs.indexOf(Tab.entries[initialTab]).coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { visibleTabs.size })
+    var moduleFabAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val isModulesTab = visibleTabs.getOrNull(pagerState.currentPage) == Tab.MODULES
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            ShortNavigationBar {
+                visibleTabs.forEachIndexed { index, tab ->
+                    ShortNavigationBarItem(
+                        selected = pagerState.currentPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(tab.iconRes),
+                                contentDescription = stringResource(tab.titleRes),
+                            )
+                        },
+                        label = { Text(stringResource(tab.titleRes)) },
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = isModulesTab && moduleFabAction != null,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+            ) {
+                FloatingActionButton(
+                    onClick = { moduleFabAction?.invoke() },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(CoreR.string.module_action_install_external),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding),
             beyondViewportPageCount = visibleTabs.size - 1,
             userScrollEnabled = true,
         ) { page ->
+            val isCurrentPage = pagerState.currentPage == page
             when (visibleTabs[page]) {
                 Tab.HOME -> {
                     val vm: HomeViewModel = viewModel(factory = VMFactory)
                     val installVm: InstallViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(Unit) { vm.startLoading() }
+                    LaunchedEffect(isCurrentPage) {
+                        if (isCurrentPage) vm.startLoading()
+                    }
                     CollectNavEvents(vm, navigator)
                     CollectNavEvents(installVm, navigator)
                     HomeScreen(vm, installVm)
                 }
                 Tab.SUPERUSER -> {
-                    val activity = LocalActivity.current as MainActivity
-                    val vm: SuperuserViewModel = viewModel(viewModelStoreOwner = activity, factory = VMFactory)
-                    LaunchedEffect(Unit) {
-                        vm.authenticate = { onSuccess ->
-                            activity.extension.withAuthentication { if (it) onSuccess() }
+                    val activity = LocalActivity.current as? ComponentActivity
+                    val vm: SuperuserViewModel = superuserViewModel
+                        ?: if (activity != null) {
+                            viewModel(viewModelStoreOwner = activity, factory = VMFactory)
+                        } else {
+                            viewModel(factory = VMFactory)
                         }
-                        vm.startLoading()
+                    LaunchedEffect(onAuthenticate) {
+                        if (onAuthenticate != null) {
+                            vm.authenticate = onAuthenticate
+                        }
+                    }
+                    LaunchedEffect(isCurrentPage) {
+                        if (isCurrentPage) vm.startLoading()
                     }
                     SuperuserScreen(vm)
                 }
                 Tab.LOG -> {
                     val vm: LogViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(Unit) { vm.startLoading() }
+                    LaunchedEffect(isCurrentPage) {
+                        if (isCurrentPage) vm.startLoading()
+                    }
                     LogScreen(vm)
                 }
                 Tab.MODULES -> {
                     val vm: ModuleViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(Unit) { vm.startLoading() }
+                    LaunchedEffect(isCurrentPage) {
+                        if (isCurrentPage) vm.startLoading()
+                    }
                     CollectNavEvents(vm, navigator)
-                    ModuleScreen(vm)
+                    ModuleScreen(
+                        viewModel = vm,
+                        onRegisterFab = { moduleFabAction = it },
+                    )
                 }
                 Tab.SETTINGS -> {
-                    val activity = LocalActivity.current as MainActivity
                     val vm: SettingsViewModel = viewModel(factory = VMFactory)
-                    LaunchedEffect(Unit) {
-                        vm.authenticate = { onSuccess ->
-                            activity.extension.withAuthentication { if (it) onSuccess() }
+                    LaunchedEffect(onAuthenticate) {
+                        if (onAuthenticate != null) {
+                            vm.authenticate = onAuthenticate
                         }
                     }
                     CollectNavEvents(vm, navigator)
@@ -136,92 +196,5 @@ fun MainScreen(initialTab: Int = Tab.HOME.ordinal) {
                 }
             }
         }
-
-        FloatingNavigationBar(
-            pagerState = pagerState,
-            visibleTabs = visibleTabs,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-    }
-}
-
-@Composable
-private fun FloatingNavigationBar(
-    pagerState: PagerState,
-    visibleTabs: List<Tab>,
-    modifier: Modifier = Modifier
-) {
-    val scope = rememberCoroutineScope()
-    val shape = RoundedCornerShape(28.dp)
-    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-    Row(
-        modifier = modifier
-            .padding(bottom = navBarInset + 12.dp, start = 24.dp, end = 24.dp)
-            .shadow(elevation = 6.dp, shape = shape)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .fillMaxWidth()
-            .height(64.dp)
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        visibleTabs.forEachIndexed { index, tab ->
-            FloatingNavItem(
-                icon = ImageVector.vectorResource(tab.iconRes),
-                label = stringResource(tab.titleRes),
-                selected = pagerState.currentPage == index,
-                enabled = true,
-                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun FloatingNavItem(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val contentColor by animateColorAsState(
-        targetValue = when {
-            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            selected -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = tween(200),
-        label = "navItemColor"
-    )
-
-    Column(
-        modifier = modifier
-            .clickable(
-                enabled = enabled,
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                role = Role.Tab,
-                onClick = onClick,
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(24.dp),
-            tint = contentColor,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = contentColor,
-        )
     }
 }

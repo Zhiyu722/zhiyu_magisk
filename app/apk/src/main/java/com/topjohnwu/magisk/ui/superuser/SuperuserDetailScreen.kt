@@ -1,11 +1,15 @@
 package com.topjohnwu.magisk.ui.superuser
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,7 +22,10 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +35,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -36,11 +42,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import com.topjohnwu.magisk.ui.component.ConfirmResult
 import com.topjohnwu.magisk.ui.component.SettingsSwitch
 import com.topjohnwu.magisk.ui.component.rememberConfirmDialog
+import com.topjohnwu.magisk.ui.component.verticalScrollbar
 import kotlinx.coroutines.launch
 import com.topjohnwu.magisk.core.R as CoreR
 
@@ -50,25 +57,38 @@ fun SuperuserDetailScreen(
     uid: Int,
     viewModel: SuperuserViewModel,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    onAuthenticate: ((onSuccess: () -> Unit) -> Unit)? = null,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val items = uiState.policies.filter { it.policy.uid == uid }
     val item = items.firstOrNull()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val revokeDialog = rememberConfirmDialog()
     val revokeTitle = stringResource(CoreR.string.su_revoke_title)
     val revokeMsg = item?.let { stringResource(CoreR.string.su_revoke_msg, it.appName) } ?: ""
 
-    LaunchedEffect(Unit) { viewModel.refreshSuRestrict() }
+    LaunchedEffect(Unit) {
+        viewModel.refreshSuRestrict()
+        if (uiState.policies.isEmpty()) {
+            viewModel.startLoading()
+        }
+    }
+    LaunchedEffect(onAuthenticate) {
+        if (onAuthenticate != null) {
+            viewModel.authenticate = onAuthenticate
+        }
+    }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(CoreR.string.settings)) },
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 16.dp),
                         onClick = onBack
                     ) {
                         Icon(
@@ -81,20 +101,37 @@ fun SuperuserDetailScreen(
             )
         }
     ) { padding ->
+        if (uiState.loading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
+
         if (item == null) return@Scaffold
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 88.dp)
+                .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
+                .verticalScroll(scrollState)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Image(
@@ -115,6 +152,7 @@ fun SuperuserDetailScreen(
                                 SharedUidBadge()
                             }
                         }
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = item.packageName,
                             style = MaterialTheme.typography.bodyMedium,
@@ -129,39 +167,49 @@ fun SuperuserDetailScreen(
                 }
             }
 
-            if (uiState.suRestrict || item.isRestricted) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                if (uiState.suRestrict || item.isRestricted) {
+                    SettingsSwitch(
+                        title = stringResource(CoreR.string.settings_su_restrict_title),
+                        checked = item.isRestricted,
+                        onCheckedChange = { viewModel.toggleRestrict(item) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
                 SettingsSwitch(
-                    title = stringResource(CoreR.string.settings_su_restrict_title),
-                    checked = item.isRestricted,
-                    onCheckedChange = { viewModel.toggleRestrict(item) }
+                    title = stringResource(CoreR.string.superuser_toggle_notification),
+                    checked = item.notification,
+                    onCheckedChange = { viewModel.updateNotify(item) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsSwitch(
+                    title = stringResource(CoreR.string.logs),
+                    checked = item.logging,
+                    onCheckedChange = { viewModel.updateLogging(item) }
                 )
             }
-            SettingsSwitch(
-                title = stringResource(CoreR.string.superuser_toggle_notification),
-                checked = item.notification,
-                onCheckedChange = { viewModel.updateNotify(item) }
-            )
-            SettingsSwitch(
-                title = stringResource(CoreR.string.logs),
-                checked = item.logging,
-                onCheckedChange = { viewModel.updateLogging(item) }
-            )
 
-            RevokeButton {
-                if (viewModel.requiresAuth) {
-                    viewModel.authenticate { viewModel.performDelete(item, onBack) }
-                } else {
-                    scope.launch {
-                        val result = revokeDialog.awaitConfirm(
-                            title = revokeTitle,
-                            content = revokeMsg,
-                        )
-                        if (result == ConfirmResult.Confirmed) {
-                            viewModel.performDelete(item, onBack)
+            RevokeButton(
+                onClick = {
+                    if (viewModel.requiresAuth) {
+                        viewModel.authenticate { viewModel.performDelete(item, onBack) }
+                    } else {
+                        scope.launch {
+                            val result = revokeDialog.awaitConfirm(
+                                title = revokeTitle,
+                                content = revokeMsg,
+                            )
+                            if (result == ConfirmResult.Confirmed) {
+                                viewModel.performDelete(item, onBack)
+                            }
                         }
                     }
                 }
-            }
+            )
         }
     }
 }
@@ -169,15 +217,17 @@ fun SuperuserDetailScreen(
 @Composable
 private fun RevokeButton(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Button(
         onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
+        colors = ButtonDefaults.filledTonalButtonColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer
         ),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = ButtonDefaults.shape,
+        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+        modifier = modifier.fillMaxWidth()
     ) {
         Icon(
             imageVector = Icons.Default.Cancel,
@@ -187,7 +237,7 @@ private fun RevokeButton(
         Spacer(Modifier.width(8.dp))
         Text(
             text = stringResource(CoreR.string.superuser_toggle_revoke),
-            fontSize = 16.sp
+            style = MaterialTheme.typography.labelLarge,
         )
     }
 }

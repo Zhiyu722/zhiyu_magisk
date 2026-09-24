@@ -4,17 +4,18 @@ import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,12 +31,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.topjohnwu.magisk.core.R
 import com.topjohnwu.magisk.core.di.ServiceLocator
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
@@ -190,7 +193,7 @@ fun rememberConfirmCallback(
 fun rememberLoadingDialog(): LoadingDialogHandle {
     val visible = remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    LoadingDialog(visible)
+    LoadingDialog(visible = visible.value)
     return remember { LoadingDialogHandleImpl(visible, scope) }
 }
 
@@ -215,9 +218,14 @@ fun rememberConfirmDialog(callback: ConfirmCallback): ConfirmDialogHandle {
     if (visible.value) {
         ConfirmDialogContent(
             visuals = handle.visuals,
-            confirm = { scope.launch { resultChannel.send(ConfirmResult.Confirmed) } },
-            dismiss = { scope.launch { resultChannel.send(ConfirmResult.Canceled) } },
-            showDialog = visible
+            confirm = {
+                visible.value = false
+                scope.launch { resultChannel.send(ConfirmResult.Confirmed) }
+            },
+            dismiss = {
+                visible.value = false
+                scope.launch { resultChannel.send(ConfirmResult.Canceled) }
+            }
         )
     }
 
@@ -225,16 +233,20 @@ fun rememberConfirmDialog(callback: ConfirmCallback): ConfirmDialogHandle {
 }
 
 @Composable
-private fun LoadingDialog(showDialog: MutableState<Boolean>) {
-    if (showDialog.value) {
+fun LoadingDialog(
+    visible: Boolean,
+    modifier: Modifier = Modifier
+) {
+    if (visible) {
         Dialog(
             onDismissRequest = {},
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
         ) {
             Surface(
-                shape = MaterialTheme.shapes.extraLarge,
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp,
-                modifier = Modifier.fillMaxWidth()
+                modifier = modifier.widthIn(max = 320.dp)
             ) {
                 Box(
                     modifier = Modifier.padding(24.dp).fillMaxWidth(),
@@ -245,11 +257,13 @@ private fun LoadingDialog(showDialog: MutableState<Boolean>) {
                         horizontalArrangement = Arrangement.Start,
                     ) {
                         CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             modifier = Modifier.padding(start = 16.dp),
-                            text = stringResource(com.topjohnwu.magisk.core.R.string.loading),
+                            text = stringResource(R.string.loading),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -259,84 +273,167 @@ private fun LoadingDialog(showDialog: MutableState<Boolean>) {
 }
 
 @Composable
-private fun ConfirmDialogContent(
-    visuals: DialogVisuals,
-    confirm: () -> Unit,
-    dismiss: () -> Unit,
-    showDialog: MutableState<Boolean>
+fun MagiskDialog(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissOnClickOutside: Boolean = true,
+    dismissOnBackPress: Boolean = true,
+    title: @Composable (() -> Unit)? = null,
+    confirmButton: @Composable (() -> Unit)? = null,
+    dismissButton: @Composable (() -> Unit)? = null,
+    content: @Composable () -> Unit,
 ) {
-    if (showDialog.value) {
-        AlertDialog(
-            modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
-            onDismissRequest = {
-                dismiss()
-                showDialog.value = false
-            },
-            title = if (visuals.title.isNotEmpty()) {
-                { Text(text = visuals.title) }
-            } else null,
-            text = {
-                visuals.content?.let { content ->
-                    if (visuals.markdown) {
-                        MarkdownText(content)
-                    } else {
-                        Text(
-                            text = content,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirm()
-                        showDialog.value = false
-                    }
-                ) {
-                    Text(
-                        text = visuals.confirm ?: stringResource(android.R.string.ok)
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        dismiss()
-                        showDialog.value = false
-                    }
-                ) {
-                    Text(
-                        text = visuals.dismiss ?: stringResource(android.R.string.cancel)
-                    )
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun MarkdownText(text: String) {
-    val contentColor = MaterialTheme.colorScheme.onBackground.toArgb()
-    AndroidView(
-        factory = { context ->
-            TextView(context).apply {
-                setTextColor(contentColor)
-                ServiceLocator.markwon.setMarkdown(this, text)
+    AlertDialog(
+        properties = DialogProperties(
+            dismissOnClickOutside = dismissOnClickOutside,
+            dismissOnBackPress = dismissOnBackPress,
+            usePlatformDefaultWidth = false
+        ),
+        modifier = modifier
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .widthIn(max = 560.dp),
+        onDismissRequest = onDismissRequest,
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = title,
+        text = {
+            ProvideTextStyle(value = MaterialTheme.typography.bodyMedium) {
+                content()
             }
         },
-        update = { textView ->
-            textView.setTextColor(contentColor)
-            ServiceLocator.markwon.setMarkdown(textView, text)
+        confirmButton = {
+            confirmButton?.invoke()
         },
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 300.dp)
+        dismissButton = dismissButton?.let {
+            { it() }
+        }
     )
 }
 
 @Composable
-fun MarkdownTextAsync(getMarkdownText: suspend () -> String) {
+fun MagiskDialog(
+    onDismissRequest: () -> Unit,
+    title: String? = null,
+    modifier: Modifier = Modifier,
+    dismissOnClickOutside: Boolean = true,
+    dismissOnBackPress: Boolean = true,
+    confirmText: String? = null,
+    onConfirm: (() -> Unit)? = null,
+    confirmEnabled: Boolean = true,
+    dismissText: String? = null,
+    onDismiss: (() -> Unit)? = null,
+    neutralText: String? = null,
+    onNeutral: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    MagiskDialog(
+        onDismissRequest = onDismissRequest,
+        title = if (!title.isNullOrEmpty()) {
+            { Text(text = title, style = MaterialTheme.typography.titleLarge) }
+        } else null,
+        modifier = modifier,
+        dismissOnClickOutside = dismissOnClickOutside,
+        dismissOnBackPress = dismissOnBackPress,
+        confirmButton = if (confirmText != null || onConfirm != null) {
+            {
+                TextButton(
+                    onClick = { onConfirm?.invoke() },
+                    enabled = confirmEnabled,
+                ) {
+                    Text(
+                        text = confirmText ?: stringResource(android.R.string.ok),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        } else null,
+        dismissButton = if (dismissText != null || onDismiss != null || neutralText != null || onNeutral != null) {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onDismiss != null || dismissText != null) {
+                        TextButton(onClick = { onDismiss?.invoke() }) {
+                            Text(
+                                text = dismissText ?: stringResource(android.R.string.cancel),
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    }
+                    if (neutralText != null && onNeutral != null) {
+                        if (onDismiss != null || dismissText != null) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                        TextButton(onClick = onNeutral) {
+                            Text(
+                                text = neutralText,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    }
+                }
+            }
+        } else null,
+        content = content
+    )
+}
+
+@Composable
+fun ConfirmDialogContent(
+    visuals: DialogVisuals,
+    confirm: () -> Unit,
+    dismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    MagiskDialog(
+        modifier = modifier,
+        onDismissRequest = dismiss,
+        title = visuals.title,
+        confirmText = visuals.confirm,
+        onConfirm = confirm,
+        dismissText = visuals.dismiss,
+        onDismiss = dismiss,
+    ) {
+        visuals.content?.let { content ->
+            if (visuals.markdown) {
+                MarkdownText(content)
+            } else {
+                Text(text = content)
+            }
+        }
+    }
+}
+
+@Composable
+fun MarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    linkColor: Color = MaterialTheme.colorScheme.primary,
+) {
+    val contentColorArgb = color.toArgb()
+    val linkColorArgb = linkColor.toArgb()
+    AndroidView(
+        factory = { context ->
+            TextView(context).apply {
+                setTextColor(contentColorArgb)
+                setLinkTextColor(linkColorArgb)
+                ServiceLocator.markwon.setMarkdown(this, text)
+            }
+        },
+        update = { textView ->
+            textView.setTextColor(contentColorArgb)
+            textView.setLinkTextColor(linkColorArgb)
+            ServiceLocator.markwon.setMarkdown(textView, text)
+        },
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+fun MarkdownTextAsync(
+    modifier: Modifier = Modifier,
+    getMarkdownText: suspend () -> String
+) {
     var mdText by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf(false) }
 
@@ -350,13 +447,16 @@ fun MarkdownTextAsync(getMarkdownText: suspend () -> String) {
     }
 
     when {
-        error -> Text(stringResource(com.topjohnwu.magisk.core.R.string.download_file_error))
-        mdText != null -> MarkdownText(mdText!!)
+        error -> Text(
+            text = stringResource(R.string.download_file_error),
+            modifier = modifier
+        )
+        mdText != null -> MarkdownText(text = mdText!!, modifier = modifier)
         else -> Box(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.onBackground)
+            CircularProgressIndicator()
         }
     }
 }

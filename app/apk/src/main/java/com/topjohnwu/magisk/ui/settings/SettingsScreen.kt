@@ -2,24 +2,26 @@ package com.topjohnwu.magisk.ui.settings
 
 import android.os.Build
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,24 +35,33 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.topjohnwu.magisk.core.Config
 import com.topjohnwu.magisk.core.Const
 import com.topjohnwu.magisk.core.Info
 import com.topjohnwu.magisk.core.isRunningAsStub
+import com.topjohnwu.magisk.core.model.ColorMode
 import com.topjohnwu.magisk.core.utils.LocaleSetting
 import com.topjohnwu.magisk.core.utils.MediaStoreUtils
 import com.topjohnwu.magisk.ui.ThemeState
+import com.topjohnwu.magisk.ui.component.MagiskDialog
 import com.topjohnwu.magisk.ui.component.SettingsArrow
 import com.topjohnwu.magisk.ui.component.SettingsDropdown
 import com.topjohnwu.magisk.ui.component.SettingsSwitch
 import com.topjohnwu.magisk.ui.component.SmallTitle
+import com.topjohnwu.magisk.ui.component.verticalScrollbar
 import com.topjohnwu.magisk.core.R as CoreR
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollState = rememberScrollState()
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(CoreR.string.settings)) },
@@ -62,21 +73,21 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 88.dp)
+                .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            CustomizationSection(viewModel)
-            Spacer(Modifier.height(12.dp))
+            CustomizationSection(viewModel = viewModel)
+            Spacer(Modifier.height(16.dp))
             AppSettingsSection()
             if (Info.env.isActive) {
-                Spacer(Modifier.height(12.dp))
-                MagiskSection(viewModel)
+                Spacer(Modifier.height(16.dp))
+                MagiskSection(viewModel = viewModel)
             }
             if (Info.showSuperUser) {
-                Spacer(Modifier.height(12.dp))
-                SuperuserSection(viewModel)
+                Spacer(Modifier.height(16.dp))
+                SuperuserSection(viewModel = viewModel)
             }
         }
     }
@@ -85,11 +96,18 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 // --- Customization ---
 
 @Composable
-private fun CustomizationSection(viewModel: SettingsViewModel) {
+private fun CustomizationSection(
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
 
     SmallTitle(text = stringResource(CoreR.string.settings_customization))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         if (LocaleSetting.useLocaleManager) {
             val locale = LocaleSetting.instance.appLocale
             val summary = locale?.getDisplayName(locale) ?: stringResource(CoreR.string.system_default)
@@ -117,24 +135,44 @@ private fun CustomizationSection(viewModel: SettingsViewModel) {
             )
         }
 
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
         // Color Mode
+        val isDynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         val resources = LocalResources.current
-        val colorModeEntries = remember {
+        val rawColorModeEntries = remember {
             resources.getStringArray(CoreR.array.color_mode).toList()
         }
+        val colorModeEntries = remember(isDynamicColorSupported) {
+            if (isDynamicColorSupported) {
+                rawColorModeEntries
+            } else {
+                rawColorModeEntries.drop(3)
+            }
+        }
         var colorMode by remember { mutableIntStateOf(Config.colorMode) }
+        val selectedIndex = ColorMode.fromValue(colorMode).toUiIndex(isDynamicColorSupported)
+
         SettingsDropdown(
             title = stringResource(CoreR.string.settings_color_mode),
             items = colorModeEntries,
-            selectedIndex = colorMode,
+            selectedIndex = selectedIndex,
             onSelectedIndexChange = { index ->
-                colorMode = index
-                Config.colorMode = index
-                ThemeState.colorMode = index
+                val newMode = ColorMode.fromUiIndex(index, isDynamicColorSupported)
+                colorMode = newMode.value
+                Config.colorMode = newMode.value
+                ThemeState.colorMode = newMode.value
             }
         )
 
         if (isRunningAsStub && ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
             SettingsArrow(
                 title = stringResource(CoreR.string.add_shortcut_title),
                 summary = stringResource(CoreR.string.setting_add_shortcut_summary),
@@ -147,18 +185,23 @@ private fun CustomizationSection(viewModel: SettingsViewModel) {
 // --- App Settings ---
 
 @Composable
-private fun AppSettingsSection() {
-    val context = LocalContext.current
+private fun AppSettingsSection(
+    modifier: Modifier = Modifier
+) {
     val resources = LocalResources.current
 
     SmallTitle(text = stringResource(CoreR.string.home_app_title))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         // Update Channel
         val updateChannelEntries = remember {
             resources.getStringArray(CoreR.array.update_channel).toList()
         }
         var updateChannel by remember {
-            mutableIntStateOf(Config.updateChannel.coerceIn(0, updateChannelEntries.size - 1))
+            mutableIntStateOf(Config.updateChannelIndex)
         }
         var showUrlDialog by remember { mutableStateOf(false) }
 
@@ -178,16 +221,26 @@ private fun AppSettingsSection() {
 
         // Update Channel URL (for custom channel)
         if (updateChannel == Config.Value.CUSTOM_CHANNEL) {
-            UpdateChannelUrlDialog(
-                show = showUrlDialog,
-                onDismiss = { showUrlDialog = false }
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
+            if (showUrlDialog) {
+                UpdateChannelUrlDialog(
+                    onDismiss = { showUrlDialog = false }
+                )
+            }
             SettingsArrow(
                 title = stringResource(CoreR.string.settings_update_custom),
                 summary = Config.customChannelUrl.ifBlank { null },
                 onClick = { showUrlDialog = true }
             )
         }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
 
         // DoH Toggle
         var doh by remember { mutableStateOf(Config.doh) }
@@ -199,6 +252,11 @@ private fun AppSettingsSection() {
                 doh = it
                 Config.doh = it
             }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
 
         // Update Checker
@@ -213,18 +271,29 @@ private fun AppSettingsSection() {
             }
         )
 
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
         // Download Path
         var showDownloadDialog by remember { mutableStateOf(false) }
-        DownloadPathDialog(
-            show = showDownloadDialog,
-            onDismiss = { showDownloadDialog = false }
-        )
+        if (showDownloadDialog) {
+            DownloadPathDialog(
+                onDismiss = { showDownloadDialog = false }
+            )
+        }
         SettingsArrow(
             title = stringResource(CoreR.string.settings_download_path_title),
             summary = MediaStoreUtils.fullPath(Config.downloadDir),
             onClick = {
                 showDownloadDialog = true
             }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
 
         // Random Package Name
@@ -244,9 +313,16 @@ private fun AppSettingsSection() {
 // --- Magisk ---
 
 @Composable
-private fun MagiskSection(viewModel: SettingsViewModel) {
+private fun MagiskSection(
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
     SmallTitle(text = stringResource(CoreR.string.magisk))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         // Systemless Hosts
         SettingsArrow(
             title = stringResource(CoreR.string.settings_hosts_title),
@@ -255,6 +331,11 @@ private fun MagiskSection(viewModel: SettingsViewModel) {
         )
 
         if (Const.Version.atLeast_24_0()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
             // Zygisk
             var zygisk by remember { mutableStateOf(Config.zygisk) }
             SettingsSwitch(
@@ -271,13 +352,23 @@ private fun MagiskSection(viewModel: SettingsViewModel) {
                 }
             )
 
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
             // DenyList
-            val denyListEnabled by viewModel.denyListEnabled.collectAsState()
+            val denyListEnabled by viewModel.denyListEnabled.collectAsStateWithLifecycle()
             SettingsSwitch(
                 title = stringResource(CoreR.string.settings_denylist_title),
                 summary = stringResource(CoreR.string.settings_denylist_summary),
                 checked = denyListEnabled,
                 onCheckedChange = { viewModel.toggleDenyList(it) }
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
             // DenyList Config
@@ -293,12 +384,18 @@ private fun MagiskSection(viewModel: SettingsViewModel) {
 // --- Superuser ---
 
 @Composable
-private fun SuperuserSection(viewModel: SettingsViewModel) {
-    val context = LocalContext.current
+private fun SuperuserSection(
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
     val resources = LocalResources.current
 
     SmallTitle(text = stringResource(CoreR.string.superuser))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         // Tapjack (SDK < S)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             var tapjack by remember { mutableStateOf(Config.suTapjack) }
@@ -310,6 +407,10 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
                     tapjack = it
                     Config.suTapjack = it
                 }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
         }
 
@@ -331,6 +432,11 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
             }
         )
 
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
         // Access Mode
         val accessEntries = remember {
             resources.getStringArray(CoreR.array.su_access).toList()
@@ -344,6 +450,11 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
                 accessMode = it
                 Config.rootMode = it
             }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
 
         // Multiuser Mode
@@ -366,6 +477,11 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
             }
         )
 
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
         // Mount Namespace Mode
         val namespaceEntries = remember {
             resources.getStringArray(CoreR.array.namespace).toList()
@@ -383,6 +499,11 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
                 mntNamespaceMode = it
                 Config.suMntNamespaceMode = it
             }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
 
         // Automatic Response
@@ -403,6 +524,11 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
             }
         )
 
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
         // Request Timeout
         val timeoutEntries = remember {
             resources.getStringArray(CoreR.array.request_timeout).toList()
@@ -419,6 +545,11 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
                 timeoutIndex = it
                 Config.suDefaultTimeout = timeoutValues[it]
             }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
 
         // SU Notification
@@ -438,6 +569,10 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
 
         // Reauthenticate (SDK < O)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
             var reAuth by remember { mutableStateOf(Config.suReAuth) }
             SettingsSwitch(
                 title = stringResource(CoreR.string.settings_su_reauth_title),
@@ -452,6 +587,10 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
 
         // Restrict (version >= 30.1)
         if (Const.Version.atLeast_30_1()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
             var restrict by remember { mutableStateOf(Config.suRestrict) }
             SettingsSwitch(
                 title = stringResource(CoreR.string.settings_su_restrict_title),
@@ -469,70 +608,66 @@ private fun SuperuserSection(viewModel: SettingsViewModel) {
 // --- Dialogs ---
 
 @Composable
-private fun UpdateChannelUrlDialog(show: Boolean, onDismiss: () -> Unit) {
-    val showState = rememberSaveable { mutableStateOf(show) }
-    showState.value = show
+private fun UpdateChannelUrlDialog(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     var url by rememberSaveable { mutableStateOf(Config.customChannelUrl) }
 
-    if (showState.value) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(CoreR.string.settings_update_custom_msg)) },
-            text = {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        Config.customChannelUrl = url
-                        Info.resetUpdate()
-                        onDismiss()
-                    }
-                ) {
-                    Text(stringResource(android.R.string.ok))
-                }
-            }
-        )
+    MagiskDialog(
+        modifier = modifier,
+        onDismissRequest = onDismiss,
+        title = stringResource(CoreR.string.settings_update_custom_msg),
+        confirmText = stringResource(android.R.string.ok),
+        onConfirm = {
+            Config.customChannelUrl = url
+            Info.resetUpdate()
+            onDismiss()
+        },
+        dismissText = stringResource(android.R.string.cancel),
+        onDismiss = onDismiss,
+    ) {
+        Column(modifier = Modifier.padding(top = 8.dp)) {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
 @Composable
-private fun DownloadPathDialog(show: Boolean, onDismiss: () -> Unit) {
-    val showState = rememberSaveable { mutableStateOf(show) }
-    showState.value = show
+private fun DownloadPathDialog(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     var path by rememberSaveable { mutableStateOf(Config.downloadDir) }
 
-    if (showState.value) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(CoreR.string.settings_download_path_title)) },
-            text = {
-                Column {
-                    Text(
-                        text = stringResource(CoreR.string.settings_download_path_message, MediaStoreUtils.fullPath(path)),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    OutlinedTextField(
-                        value = path,
-                        onValueChange = { path = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        Config.downloadDir = path
-                        onDismiss()
-                    }
-                ) {
-                    Text(stringResource(android.R.string.ok))
-                }
-            }
-        )
+    MagiskDialog(
+        modifier = modifier,
+        onDismissRequest = onDismiss,
+        title = stringResource(CoreR.string.settings_download_path_title),
+        confirmText = stringResource(android.R.string.ok),
+        onConfirm = {
+            Config.downloadDir = path
+            onDismiss()
+        },
+        dismissText = stringResource(android.R.string.cancel),
+        onDismiss = onDismiss,
+    ) {
+        Column {
+            Text(
+                text = stringResource(CoreR.string.settings_download_path_message, MediaStoreUtils.fullPath(path)),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value = path,
+                onValueChange = { path = it },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }

@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
@@ -28,7 +27,6 @@ class InstallViewModel(svc: NetworkService) : BaseViewModel() {
     enum class Method { NONE, PATCH, DIRECT, INACTIVE_SLOT, DOWNLOAD }
 
     data class UiState(
-        val step: Int = 0,
         val method: Method = Method.NONE,
         val notes: String = "",
         val patchUri: Uri? = null,
@@ -41,7 +39,7 @@ class InstallViewModel(svc: NetworkService) : BaseViewModel() {
     val skipOptions = Info.isEmulator || (Info.isSAR && !Info.isFDE && Info.ramdisk)
     val noSecondSlot = !isRooted || !Info.isAB || Info.isEmulator
 
-    private val _uiState = MutableStateFlow(UiState(step = if (skipOptions) 1 else 0))
+    private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
@@ -57,17 +55,11 @@ class InstallViewModel(svc: NetworkService) : BaseViewModel() {
                         note
                     }
                 }
-                withContext(Dispatchers.Main) {
-                    _uiState.update { it.copy(notes = noteText) }
-                }
+                _uiState.update { it.copy(notes = noteText) }
             } catch (e: IOException) {
                 Timber.e(e)
             }
         }
-    }
-
-    fun nextStep() {
-        _uiState.update { it.copy(step = 1) }
     }
 
     fun selectMethod(method: Method) {

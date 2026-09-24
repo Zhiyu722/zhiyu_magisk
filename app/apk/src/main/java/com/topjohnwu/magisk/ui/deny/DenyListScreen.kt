@@ -1,5 +1,9 @@
 package com.topjohnwu.magisk.ui.deny
+
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,12 +20,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -32,60 +42,73 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import com.topjohnwu.magisk.ui.component.verticalScrollbar
 import com.topjohnwu.magisk.core.R as CoreR
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
-    val loading by viewModel.loading.collectAsState()
-    val apps by viewModel.filteredApps.collectAsState()
-    val query by viewModel.query.collectAsState()
-    val showSystem by viewModel.showSystem.collectAsState()
-    val showOS by viewModel.showOS.collectAsState()
-    val sortBy by viewModel.sortBy.collectAsState()
-    val sortReverse by viewModel.sortReverse.collectAsState()
+fun DenyListScreen(
+    viewModel: DenyListViewModel,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val apps by viewModel.filteredApps.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val showSystem by viewModel.showSystem.collectAsStateWithLifecycle()
+    val showOS by viewModel.showOS.collectAsStateWithLifecycle()
+    val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
+    val sortReverse by viewModel.sortReverse.collectAsStateWithLifecycle()
 
-    val showSortMenu = remember { mutableStateOf(false) }
-    val showFilterMenu = remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+    var showFilterMenu by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(CoreR.string.denylist)) },
                 navigationIcon = {
                     IconButton(
-                        modifier = Modifier.padding(start = 16.dp),
                         onClick = onBack
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                 },
                 actions = {
                     Box {
                         IconButton(
-                            onClick = { showSortMenu.value = true },
+                            onClick = { showSortMenu = true },
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -93,8 +116,8 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                             )
                         }
                         DropdownMenu(
-                            expanded = showSortMenu.value,
-                            onDismissRequest = { showSortMenu.value = false }
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
                         ) {
                             val sortOptions = listOf(
                                 CoreR.string.sort_by_name to SortBy.NAME,
@@ -106,11 +129,11 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(resId)) },
                                     trailingIcon = if (sortBy == sort) {
-                                        { Icon(androidx.compose.material.icons.Icons.Default.Check, contentDescription = null) }
+                                        { Icon(Icons.Default.Check, contentDescription = null) }
                                     } else null,
                                     onClick = {
                                         viewModel.setSortBy(sort)
-                                        showSortMenu.value = false
+                                        showSortMenu = false
                                     }
                                 )
                             }
@@ -121,7 +144,7 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                                 } else null,
                                 onClick = {
                                     viewModel.toggleSortReverse()
-                                    showSortMenu.value = false
+                                    showSortMenu = false
                                 }
                             )
                         }
@@ -129,8 +152,7 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
 
                     Box {
                         IconButton(
-                            modifier = Modifier.padding(end = 16.dp),
-                            onClick = { showFilterMenu.value = true },
+                            onClick = { showFilterMenu = true },
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
@@ -138,8 +160,9 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                             )
                         }
                         DropdownMenu(
-                            expanded = showFilterMenu.value,
-                            onDismissRequest = { showFilterMenu.value = false }
+                            expanded = showFilterMenu,
+                            onDismissRequest = { showFilterMenu = false },
+                            offset = DpOffset(x = (-8).dp, y = 0.dp),
                         ) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(CoreR.string.show_system_app)) },
@@ -148,7 +171,7 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                                 } else null,
                                 onClick = {
                                     viewModel.setShowSystem(!showSystem)
-                                    showFilterMenu.value = false
+                                    showFilterMenu = false
                                 }
                             )
                             DropdownMenuItem(
@@ -161,7 +184,7 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                                         viewModel.setShowSystem(true)
                                     }
                                     viewModel.setShowOS(!showOS)
-                                    showFilterMenu.value = false
+                                    showFilterMenu = false
                                 }
                             )
                         }
@@ -177,7 +200,7 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                 onQueryChange = viewModel::setQuery,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             )
 
             if (loading) {
@@ -195,19 +218,27 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
                     }
                 }
             } else {
+                val listState = rememberLazyListState()
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .nestedScroll(scrollBehavior.nestedScrollConnection)
-                        .padding(horizontal = 12.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp),
+                        .verticalScrollbar(listState, contentPadding = PaddingValues(vertical = 8.dp)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(
                         items = apps,
-                        key = { it.info.packageName }
+                        key = { it.info.packageName },
+                        contentType = { "DenyAppCard" }
                     ) { app ->
-                        DenyAppCard(app)
+                        DenyAppCard(
+                            app = app,
+                            onToggleExpand = { viewModel.toggleExpanded(app) },
+                            onToggleAll = { viewModel.toggleAll(app) },
+                            onToggleProcess = { proc -> viewModel.toggleProcess(app, proc) }
+                        )
                     }
                 }
             }
@@ -215,20 +246,69 @@ fun DenyListScreen(viewModel: DenyListViewModel, onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchInput(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    OutlinedTextField(
+private fun SearchInput(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    TextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = modifier,
-        label = { Text(stringResource(CoreR.string.hide_filter_hint)) }
+        placeholder = { Text(stringResource(CoreR.string.hide_filter_hint)) },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else null,
+        shape = SearchBarDefaults.inputFieldShape,
+        singleLine = true,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+        )
     )
 }
 
 @Composable
-private fun DenyAppCard(app: DenyAppState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column {
+private fun DenyAppCard(
+    app: DenyAppState,
+    onToggleExpand: () -> Unit,
+    onToggleAll: () -> Unit,
+    onToggleProcess: (DenyProcessState) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(
+            modifier = Modifier.animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        ) {
             if (app.checkedPercent > 0f) {
                 LinearProgressIndicator(
                     progress = { app.checkedPercent },
@@ -239,8 +319,8 @@ private fun DenyAppCard(app: DenyAppState) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { app.isExpanded = !app.isExpanded }
-                    .padding(12.dp),
+                    .clickable(onClick = onToggleExpand)
+                    .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
@@ -252,8 +332,9 @@ private fun DenyAppCard(app: DenyAppState) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = app.info.label,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.titleMedium,
                     )
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = app.info.packageName,
                         style = MaterialTheme.typography.bodyMedium,
@@ -267,7 +348,7 @@ private fun DenyAppCard(app: DenyAppState) {
                         app.checkedPercent < 1f -> ToggleableState.Indeterminate
                         else -> ToggleableState.On
                     },
-                    onClick = { app.toggleAll() }
+                    onClick = onToggleAll
                 )
             }
 
@@ -275,10 +356,13 @@ private fun DenyAppCard(app: DenyAppState) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 52.dp)
+                        .padding(start = 52.dp, bottom = 8.dp)
                 ) {
                     app.processes.forEach { proc ->
-                        ProcessRow(proc)
+                        ProcessRow(
+                            proc = proc,
+                            onToggle = { onToggleProcess(proc) }
+                        )
                     }
                 }
             }
@@ -287,11 +371,20 @@ private fun DenyAppCard(app: DenyAppState) {
 }
 
 @Composable
-private fun ProcessRow(proc: DenyProcessState) {
+private fun ProcessRow(
+    proc: DenyProcessState,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable { proc.toggle() }
+            .clip(RoundedCornerShape(12.dp))
+            .toggleable(
+                value = proc.isEnabled,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() }
+            )
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -305,7 +398,7 @@ private fun ProcessRow(proc: DenyProcessState) {
         Spacer(Modifier.width(8.dp))
         Checkbox(
             checked = proc.isEnabled,
-            onCheckedChange = { proc.toggle() }
+            onCheckedChange = null
         )
     }
 }
