@@ -142,6 +142,9 @@ class GlassBackdropHolder {
 
     /** How far the visible screen is scrolled (0..1), for chrome outside that screen. */
     var frost: Float by mutableFloatStateOf(0f)
+
+    /** How far the visible screen's chrome is slid away (0..1), for chrome outside that screen. */
+    var chromeHidden: Float by mutableFloatStateOf(0f)
 }
 
 val LocalGlassBackdropHolder = staticCompositionLocalOf<GlassBackdropHolder?> { null }
@@ -662,8 +665,12 @@ fun GlassScreen(
     val scrollState = rememberGlassScrollState()
     val holder = LocalGlassBackdropHolder.current
     if (holder != null) {
-        // Floating chrome outside this screen (the navigation bar) reads the frost level from here
-        SideEffect { holder.frost = scrollState.fraction }
+        // Floating chrome outside this screen (the navigation bar) follows the same scroll:
+        // it frosts up and slides away together with this screen's app bar.
+        SideEffect {
+            holder.frost = scrollState.fraction
+            holder.chromeHidden = scrollState.chromeHidden
+        }
     }
     CompositionLocalProvider(LocalGlassScrollState provides scrollState) {
         Box(modifier.fillMaxSize()) {

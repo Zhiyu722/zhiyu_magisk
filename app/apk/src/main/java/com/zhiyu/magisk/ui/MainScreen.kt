@@ -84,6 +84,10 @@ import com.zhiyu.magisk.ui.superuser.SuperuserScreen
 import com.zhiyu.magisk.ui.superuser.SuperuserViewModel
 import kotlinx.coroutines.launch
 import com.zhiyu.magisk.core.R as CoreR
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.offset
 
 enum class Tab(val titleRes: Int, val iconRes: Int) {
     MODULES(CoreR.string.modules, R.drawable.ic_module),
@@ -249,12 +253,17 @@ private fun FloatingNavigationBar(
     val swiping = pagerState.isScrollInProgress
     val navScale by animateFloatAsState(if (swiping) 0.96f else 1f, label = "navScale")
     val frost = holder?.frost ?: 0f
+    val slidAway = holder?.chromeHidden ?: 0f
     val body = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f + 0.30f * frost)
+    val slideDistancePx = with(LocalDensity.current) { (68.dp + navBarInset + 24.dp).toPx() }
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
         GlassSurface(
             modifier = modifier
                 .padding(bottom = navBarInset + 12.dp, start = 20.dp, end = 20.dp)
+                // Sliding glass: like the app bar, the pill tucks itself away while the content is
+                // scrolled down and slides back in as soon as the user scrolls up again.
+                .offset { IntOffset(0, (slidAway * slideDistancePx).roundToInt()) }
                 .graphicsLayer {
                     scaleX = navScale
                     scaleY = navScale
