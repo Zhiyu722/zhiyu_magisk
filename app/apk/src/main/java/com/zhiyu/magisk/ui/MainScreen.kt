@@ -118,44 +118,16 @@ fun MainScreen(
     // Publishes the backdrop and scroll level of the currently visible tab, so the floating
     // navigation bar below — which lives outside every screen — can frost up with it.
     GlassBackdropHolderProvider {
-        Scaffold(
-            modifier = modifier.fillMaxSize(),
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                // Kept in the Scaffold's slot: the tab content keeps the bottom inset v31.0
-                // gives it (no screen content hides behind the bar) and the FAB, which the
-                // Scaffold positions above the bottom bar, keeps floating above the pill.
-                FloatingNavigationBar(
-                    pagerState = pagerState,
-                    visibleTabs = visibleTabs
-                )
-            },
-            floatingActionButton = {
-                AnimatedVisibility(
-                    visible = isModulesTab && moduleFabAction != null,
-                    enter = scaleIn() + fadeIn(),
-                    exit = scaleOut() + fadeOut(),
-                ) {
-                    FloatingActionButton(
-                        onClick = { moduleFabAction?.invoke() },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = stringResource(CoreR.string.module_action_install_external),
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
-                }
-            }
-        ) { innerPadding ->
+        // The pager is full-bleed and the pill is an overlay, so the tab content really does
+        // scroll *under* the frosted bar and gets blurred behind it.
+        Box(modifier = modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                contentWindowInsets = WindowInsets(0, 0, 0, 0)
+            ) { _ ->
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding),
+                modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = visibleTabs.size - 1,
                 userScrollEnabled = true,
             ) { page ->
@@ -219,6 +191,34 @@ fun MainScreen(
                     }
                 }
             }
+            }
+
+            AnimatedVisibility(
+                visible = isModulesTab && moduleFabAction != null,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 104.dp),
+            ) {
+                FloatingActionButton(
+                    onClick = { moduleFabAction?.invoke() },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(CoreR.string.module_action_install_external),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
+
+            FloatingNavigationBar(
+                pagerState = pagerState,
+                visibleTabs = visibleTabs,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 }

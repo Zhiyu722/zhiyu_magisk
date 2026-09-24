@@ -198,7 +198,7 @@ private fun SuLogTab(
                     .weight(1f)
                     .nestedScroll(nestedScrollConnection)
                     .verticalScrollbar(listState, contentPadding = PaddingValues(vertical = 12.dp)),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(

@@ -127,14 +127,14 @@ fun SuperuserScreen(
                     listState,
                     contentPadding = PaddingValues(
                         top = padding.calculateTopPadding() + 4.dp,
-                        bottom = padding.calculateBottomPadding() + 4.dp
+                        bottom = padding.calculateBottomPadding() + 104.dp
                     )
                 ),
             contentPadding = PaddingValues(
                 start = padding.calculateStartPadding(layoutDirection) + 12.dp,
                 top = padding.calculateTopPadding() + 4.dp,
                 end = padding.calculateEndPadding(layoutDirection) + 12.dp,
-                bottom = padding.calculateBottomPadding() + 4.dp
+                bottom = padding.calculateBottomPadding() + 104.dp
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {

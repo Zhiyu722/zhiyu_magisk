@@ -77,7 +77,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
                 .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp)
         ) {
             CustomizationSection(viewModel = viewModel)
             Spacer(Modifier.height(16.dp))
