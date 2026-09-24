@@ -5,13 +5,13 @@
 
     <data>
 
-        <import type="com.topjohnwu.magisk.core.Info" />
+        <import type="com.zhiyu.magisk.core.Info" />
 
-        <import type="com.topjohnwu.magisk.ui.home.HomeViewModel.State" />
+        <import type="com.zhiyu.magisk.ui.home.HomeViewModel.State" />
 
         <variable
             name="viewModel"
-            type="com.topjohnwu.magisk.ui.home.HomeViewModel" />
+            type="com.zhiyu.magisk.ui.home.HomeViewModel" />
 
     </data>
 
