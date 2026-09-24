@@ -151,10 +151,16 @@ void exec_module_scripts(Utf8CStr stage, const rust::Vec<ModuleInfo> &module_lis
 
 constexpr char install_script[] = R"EOF(
 APK=%s
+PKG=%s
 log -t Magisk "pm_install: $APK"
-log -t Magisk "pm_install: $(pm install -g -r $APK 2>&1)"
-appops set %s REQUEST_INSTALL_PACKAGES allow
-rm -f $APK
+chmod 644 "$APK"
+chcon u:object_r:system_file:s0 "$APK"
+SESSION_ID=$(pm install-create -r -g -d -f | awk -F'[][]' '{print $2}')
+log -t Magisk "pm_install: session $SESSION_ID"
+pm install-write "$SESSION_ID" install "$APK"
+pm install-commit "$SESSION_ID"
+appops set "$PKG" REQUEST_INSTALL_PACKAGES allow
+rm -f "$APK"
 )EOF";
 
 void install_apk(Utf8CStr apk) {

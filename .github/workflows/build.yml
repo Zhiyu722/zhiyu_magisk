@@ -35,20 +35,59 @@ jobs:
       - name: Build debug
         run: ./build.py -v all
 
+      # Fixed artifact naming: <version>-zhiyu(<versionCode>)
+      # e.g. 31.0-zhiyu(31000) -> Magisk-31.0-zhiyu(31000).apk
+      - name: Name artifacts after the version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          CODE=$(sed -n 's/^magisk\.versionCode=//p' app/gradle.properties | head -n1 | tr -d '[:space:]')
+          if [ -z "$CODE" ]; then
+            echo "!! magisk.versionCode not found in app/gradle.properties" >&2
+            exit 1
+          fi
+          VER=$(python3 -c "import sys; print(f'{int(sys.argv[1]) / 1000:g}')" "$CODE")
+          NAME="${VER}-zhiyu(${CODE})"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "== naming artifacts: $NAME"
+
+          renamed=0
+          for f in out/*.apk; do
+            [ -e "$f" ] || continue
+            case "$(basename "$f")" in
+              Magisk-*)            continue ;;
+              app-release.apk)     mv "$f" "out/Magisk-${NAME}.apk" ;;
+              app-debug.apk)       mv "$f" "out/Magisk-${NAME}-debug.apk" ;;
+              app-legacy-release.apk) mv "$f" "out/Magisk-${NAME}-legacy.apk" ;;
+              app-legacy-debug.apk)   mv "$f" "out/Magisk-${NAME}-legacy-debug.apk" ;;
+              stub-*)              mv "$f" "out/Magisk-${NAME}-$(basename "$f")" ;;
+              *)                   continue ;;
+            esac
+            renamed=$((renamed + 1))
+          done
+          for f in out/*.zip; do
+            [ -e "$f" ] || continue
+            mv "$f" "out/Magisk-${NAME}.zip"
+            renamed=$((renamed + 1))
+          done
+          echo "renamed $renamed artifact(s)"
+          ls -l out
+
       - name: Stop gradle daemon
         run: ./app/gradlew --stop
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.sha }}
+          name: Magisk-${{ steps.ver.outputs.name }}
           path: out
           compression-level: 9
 
       - name: Upload mapping and native debug symbols
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.sha }}-symbols
+          name: Magisk-${{ steps.ver.outputs.name }}-symbols
           path: app/apk/build/outputs
           compression-level: 9
 
