@@ -12,8 +12,6 @@ import android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS
 import android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Drawable
-import android.os.Build
-import android.os.Build.VERSION.SDK_INT
 import androidx.core.os.ProcessCompat
 import com.topjohnwu.magisk.core.ktx.getLabel
 import java.util.Locale
@@ -46,6 +44,10 @@ class AppProcessInfo(
     val label = info.getLabel(pm)
     val iconImage: Drawable = runCatching { info.loadIcon(pm) }.getOrDefault(pm.defaultActivityIcon)
     val packageName: String get() = info.packageName
+    var firstInstallTime: Long = 0L
+        private set
+    var lastUpdateTime: Long = 0L
+        private set
     val processes = fetchProcesses(pm)
 
     override fun compareTo(other: AppProcessInfo) = comparator.compare(this, other)
@@ -67,19 +69,30 @@ class AppProcessInfo(
     private fun Array<out ComponentInfo>?.toProcessList() =
         orEmpty().map { createProcess(it.getProcName()) }
 
-    private fun Array<ServiceInfo>?.toProcessList() = orEmpty().map {
-        if (it.isIsolated) {
-            if (it.useAppZygote) {
-                val proc = info.processName ?: info.packageName
-                createProcess("${proc}_zygote")
+    private fun Array<ServiceInfo>?.toProcessList(): List<ProcessInfo> {
+        if (this == null) return emptyList()
+        val result = mutableListOf<ProcessInfo>()
+        var hasIsolated = false
+        for (si in this) {
+            if (si.isIsolated) {
+                if (si.useAppZygote) {
+                    val proc = info.processName ?: info.packageName
+                    result.add(createProcess("${proc}_zygote"))
+                } else {
+                    hasIsolated = true
+                }
             } else {
-                val proc = if (SDK_INT >= Build.VERSION_CODES.Q)
-                    "${it.getProcName()}:${it.name}" else it.getProcName()
-                createProcess(proc, ISOLATED_MAGIC)
+                result.add(createProcess(si.getProcName()))
             }
-        } else {
-            createProcess(it.getProcName())
         }
+        if (hasIsolated) {
+            val prefix = "${info.processName ?: info.packageName}:"
+            val isEnabled = denyList.any {
+                it.packageName == ISOLATED_MAGIC && it.process.startsWith(prefix)
+            }
+            result.add(ProcessInfo(prefix, ISOLATED_MAGIC, isEnabled))
+        }
+        return result
     }
 
     private fun fetchProcesses(pm: PackageManager): Collection<ProcessInfo> {
@@ -91,6 +104,9 @@ class AppProcessInfo(
             // Exceed binder data transfer limit, parse the package locally
             pm.getPackageArchiveInfo(info.sourceDir, flag) ?: return emptyList()
         }
+
+        firstInstallTime = packageInfo.firstInstallTime
+        lastUpdateTime = packageInfo.lastUpdateTime
 
         val processSet = TreeSet<ProcessInfo>(compareBy({ it.name }, { it.isIsolated }))
         processSet += packageInfo.activities.toProcessList()
@@ -114,5 +130,4 @@ data class ProcessInfo(
     var isEnabled: Boolean
 ) {
     val isIsolated = packageName == ISOLATED_MAGIC
-    val isAppZygote = name.endsWith("_zygote")
 }
