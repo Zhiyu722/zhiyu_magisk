@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -742,9 +743,14 @@ fun GlassScreen(
 ) {
     val scrollState = rememberGlassScrollState()
     val holder = LocalGlassBackdropHolder.current
-    if (holder != null) {
-        // Floating chrome outside this screen (the navigation bar) follows the same scroll:
-        // it frosts up and slides away together with this screen's app bar.
+    // Every pager page is composed at once, so only the page actually on screen may publish its
+    // scroll state — otherwise an off-screen page (which never scrolls) overwrites it and the
+    // chrome outside the screen looks frozen.
+    var positionX by remember { mutableFloatStateOf(0f) }
+    val halfScreen = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx() / 2
+    }
+    if (holder != null && abs(positionX) < halfScreen) {
         SideEffect {
             holder.frost = scrollState.fraction
             holder.chromeHidden = scrollState.chromeHidden
@@ -768,6 +774,7 @@ fun GlassScreen(
                     Box(
                         Modifier
                             .fillMaxSize()
+                            .onGloballyPositioned { positionX = it.positionInRoot().x }
                             .nestedScroll(scrollState.connection)
                             .then(source)
                     ) {
