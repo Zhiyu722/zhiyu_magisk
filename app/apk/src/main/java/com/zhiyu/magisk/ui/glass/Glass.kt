@@ -111,7 +111,7 @@ import kotlin.math.roundToInt
 internal const val GlassLogTag = "GlassScroll"
 
 /** Temporary diagnostic switch; set to false (or delete the log lines) once verified. */
-internal const val GlassDebugLog = false
+internal const val GlassDebugLog = true
 
 object GlassDefaults {
 
@@ -259,6 +259,11 @@ class GlassScrollState internal constructor(
         internal set
 
     internal val connection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (GlassDebugLog) Log.d(GlassLogTag, "pre available=${available.y} source=$source")
+            return Offset.Zero
+        }
+
         override fun onPostScroll(
             consumed: Offset,
             available: Offset,
