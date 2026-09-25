@@ -1,6 +1,7 @@
 package com.zhiyu.magisk.ui.glass
 
 import android.os.Build
+import android.content.res.Configuration
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -18,8 +19,11 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +33,7 @@ import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +67,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -122,6 +129,65 @@ object GlassDefaults {
 
     /** No magnification; used for wide chrome where a lens would look wrong. */
     const val noRefraction: Float = 1f
+}
+
+/**
+ * Runtime window metrics, read from the device at composition time, so every piece of glass
+ * adapts to the actual screen: phones, foldables, tablets, landscape and split screen.
+ */
+@Immutable
+data class GlassWindowInfo(
+    val widthDp: Int,
+    val heightDp: Int,
+    val isLandscape: Boolean
+) {
+    /** Phones in portrait. */
+    val isCompactWidth: Boolean get() = widthDp < 600
+
+    /** Tablets / unfolded foldables. */
+    val isExpandedWidth: Boolean get() = widthDp >= 840
+
+    /** Side padding for page content, growing with the screen. */
+    val pagePadding: Dp
+        get() = when {
+            widthDp >= 1000 -> 32.dp
+            widthDp >= 840 -> 28.dp
+            widthDp >= 600 -> 24.dp
+            else -> 16.dp
+        }
+
+    /** Outer margin of floating chrome (app bar, navigation pill). */
+    val chromeMargin: Dp
+        get() = when {
+            widthDp >= 840 -> 28.dp
+            widthDp >= 600 -> 20.dp
+            else -> 12.dp
+        }
+
+    /** Floating chrome never stretches across a wide screen. */
+    val chromeMaxWidth: Dp
+        get() = if (isExpandedWidth) 620.dp else Dp.Unspecified
+}
+
+/** Real screen size, provided by [GlassScreen]; sensible phone defaults outside of one. */
+val LocalGlassWindowInfo = staticCompositionLocalOf {
+    GlassWindowInfo(widthDp = 360, heightDp = 800, isLandscape = false)
+}
+
+@Composable
+fun rememberGlassWindowInfo(): GlassWindowInfo {
+    val configuration = LocalConfiguration.current
+    return remember(
+        configuration.screenWidthDp,
+        configuration.screenHeightDp,
+        configuration.orientation
+    ) {
+        GlassWindowInfo(
+            widthDp = configuration.screenWidthDp,
+            heightDp = configuration.screenHeightDp,
+            isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        )
+    }
 }
 
 /** True when the composed theme is dark; provided by `MagiskTheme`. */
@@ -598,14 +664,20 @@ fun GlassTopAppBar(
     actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
-    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // safeDrawing (not statusBars) so notches / punch-holes, landscape gesture areas, split
+    // screen and multi-window are all respected on every device.
+    val window = LocalGlassWindowInfo.current
+    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    val topInset = safe.calculateTopPadding()
+    val sideInsetStart = safe.calculateStartPadding(LocalLayoutDirection.current)
+    val sideInsetEnd = safe.calculateEndPadding(LocalLayoutDirection.current)
     val scroll = LocalGlassScrollState.current
     val density = LocalDensity.current
 
     val frost = scroll?.fraction ?: 0f
     val hidden = scroll?.chromeHidden ?: 0f
     val behaviourOffset = scrollBehavior?.state?.heightOffset ?: 0f
-    val barHeightPx = with(density) { (GlassAppBarHeight + statusBar).toPx() }
+    val barHeightPx = with(density) { (GlassAppBarHeight + topInset).toPx() }
 
     val surface = MaterialTheme.colorScheme.surface
     val body = surface.copy(alpha = 0.40f + 0.42f * frost)
@@ -614,7 +686,7 @@ fun GlassTopAppBar(
     GlassSurface(
         modifier = modifier
             .fillMaxWidth()
-            .height(GlassAppBarHeight + statusBar)
+            .heightIn(min = GlassAppBarHeight + topInset)
             .offset {
                 IntOffset(0, (behaviourOffset - hidden * barHeightPx).roundToInt())
             },
@@ -626,9 +698,13 @@ fun GlassTopAppBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = statusBar)
-                .height(GlassAppBarHeight)
-                .padding(start = 16.dp, end = 4.dp),
+                .padding(top = topInset, start = sideInsetStart, end = sideInsetEnd)
+                // heightIn (not height) so a larger system font scale grows the bar instead of
+                // clipping the title.
+                .heightIn(min = GlassAppBarHeight)
+                .widthIn(max = window.chromeMaxWidth)
+                .align(Alignment.Center)
+                .padding(start = window.pagePadding, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             navigationIcon()
@@ -672,7 +748,10 @@ fun GlassScreen(
             holder.chromeHidden = scrollState.chromeHidden
         }
     }
-    CompositionLocalProvider(LocalGlassScrollState provides scrollState) {
+    CompositionLocalProvider(
+        LocalGlassScrollState provides scrollState,
+        LocalGlassWindowInfo provides rememberGlassWindowInfo()
+    ) {
         Box(modifier.fillMaxSize()) {
             GlassBackground()
             GlassBackdropHost { source ->

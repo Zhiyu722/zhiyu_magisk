@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -251,6 +253,7 @@ private fun FloatingNavigationBar(
     val holder = LocalGlassBackdropHolder.current
 
     val swiping = pagerState.isScrollInProgress
+    val window = LocalGlassWindowInfo.current
     val navScale by animateFloatAsState(if (swiping) 0.96f else 1f, label = "navScale")
     val frost = holder?.frost ?: 0f
     val slidAway = holder?.chromeHidden ?: 0f
@@ -260,7 +263,11 @@ private fun FloatingNavigationBar(
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
         GlassSurface(
             modifier = modifier
-                .padding(bottom = navBarInset + 12.dp, start = 20.dp, end = 20.dp)
+                .padding(
+                    bottom = navBarInset + 12.dp,
+                    start = window.chromeMargin + 8.dp,
+                    end = window.chromeMargin + 8.dp
+                )
                 // Sliding glass: like the app bar, the pill tucks itself away while the content is
                 // scrolled down and slides back in as soon as the user scrolls up again.
                 .offset { IntOffset(0, (slidAway * slideDistancePx).roundToInt()) }
@@ -270,7 +277,8 @@ private fun FloatingNavigationBar(
                 }
                 .shadow(elevation = 10.dp, shape = shape, clip = false)
                 .fillMaxWidth()
-                .height(68.dp),
+                .widthIn(max = window.chromeMaxWidth)
+                .heightIn(min = 68.dp),
             shape = shape,
             blurRadius = GlassDefaults.chromeBlur * (0.6f + 0.4f * frost),
             refraction = GlassDefaults.noRefraction,

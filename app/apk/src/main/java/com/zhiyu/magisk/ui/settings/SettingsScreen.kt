@@ -50,6 +50,7 @@ import com.zhiyu.magisk.ui.component.verticalScrollbar
 import com.zhiyu.magisk.ui.glass.GlassCard
 import com.zhiyu.magisk.ui.glass.GlassScreen
 import com.zhiyu.magisk.ui.glass.GlassTopAppBar
+import com.zhiyu.magisk.ui.glass.LocalGlassWindowInfo
 import com.zhiyu.magisk.core.R as CoreR
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,6 +61,8 @@ fun SettingsScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val scrollState = rememberScrollState()
+    val window = LocalGlassWindowInfo.current
+
     GlassScreen(
         modifier = modifier,
         topBar = {
@@ -77,7 +80,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
                 .verticalScroll(scrollState)
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp)
+                .padding(start = window.pagePadding, end = window.pagePadding, top = 12.dp, bottom = 104.dp)
         ) {
             CustomizationSection(viewModel = viewModel)
             Spacer(Modifier.height(16.dp))

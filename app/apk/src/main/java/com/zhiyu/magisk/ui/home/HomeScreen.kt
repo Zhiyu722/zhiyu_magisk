@@ -94,6 +94,7 @@ import com.zhiyu.magisk.ui.glass.GlassCard
 import com.zhiyu.magisk.ui.glass.GlassDefaults
 import com.zhiyu.magisk.ui.glass.GlassScreen
 import com.zhiyu.magisk.ui.glass.GlassTopAppBar
+import com.zhiyu.magisk.ui.glass.LocalGlassWindowInfo
 import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
 import com.zhiyu.magisk.ui.glass.glassTint
 import com.zhiyu.magisk.ui.install.InstallDialog
@@ -248,6 +249,8 @@ fun HomeScreen(
 
     val scrollState = rememberScrollState()
 
+    val window = LocalGlassWindowInfo.current
+
     GlassScreen(
         modifier = modifier,
         topBar = {
@@ -278,7 +281,7 @@ fun HomeScreen(
                 .padding(padding)
                 .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
                 .verticalScroll(scrollState)
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
+                .padding(start = window.pagePadding, end = window.pagePadding, top = 12.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (uiState.isNoticeVisible) {
