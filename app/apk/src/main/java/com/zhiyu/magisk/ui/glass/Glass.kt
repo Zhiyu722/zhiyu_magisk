@@ -267,15 +267,20 @@ class GlassScrollState internal constructor(
             // Compose reports consumed.y as *negative* while the user swipes up (which scrolls the
             // content down), so the amount that means "scrolled down" is -consumed.y. Using the raw
             // value would clamp the state to 0 forever and the chrome would never move.
-            val scrolledDown = -consumed.y
+            // Only deltas the content actually consumed tell us the scroll direction. When nothing
+            // consumed them (empty list, overscroll bounce) available != 0 and the sign is not
+            // meaningful — counting those is what kept the state pinned at 0 before.
+            // Convention: positive consumed.y == the content scrolled down.
+            val scrolledDown = consumed.y
+            val meaningful = available.y == 0f
             if (GlassDebugLog) {
                 Log.d(
                     GlassLogTag,
-                    "consumed=${consumed.y} available=${available.y} " +
-                        "down=$scrolledDown frost=$fraction hidden=$chromeHidden"
+                    "consumed=${consumed.y} available=${available.y} meaningful=$meaningful " +
+                        "frost=$fraction hidden=$chromeHidden"
                 )
             }
-            if (scrolledDown != 0f) {
+            if (meaningful && scrolledDown != 0f) {
                 // Scrolling down tucks the chrome away, scrolling up brings it back twice as fast
                 val step = if (scrolledDown > 0f) {
                     scrolledDown / hideDistance
