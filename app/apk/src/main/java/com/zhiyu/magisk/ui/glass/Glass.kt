@@ -76,7 +76,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.zhiyu.magisk.BuildConfig
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -110,6 +109,9 @@ import kotlin.math.roundToInt
  * edge, which still reads as glass.
  */
 internal const val GlassLogTag = "GlassScroll"
+
+/** Temporary diagnostic switch; set to false (or delete the log lines) once verified. */
+internal const val GlassDebugLog = true
 
 object GlassDefaults {
 
@@ -268,7 +270,7 @@ class GlassScrollState internal constructor(
                 val step = if (dy > 0f) dy / hideDistance else dy / (hideDistance * 0.5f)
                 chromeHidden = (chromeHidden + step).coerceIn(0f, 1f)
                 fraction = (fraction + dy / frostDistance).coerceIn(0f, 1f)
-                if (BuildConfig.DEBUG) {
+                if (GlassDebugLog) {
                     Log.d(GlassLogTag, "scroll dy=$dy frost=$fraction hidden=$chromeHidden")
                 }
             }
@@ -772,7 +774,7 @@ fun GlassScreen(
     // scroll state — otherwise an off-screen page (which never scrolls) overwrites it and the
     // chrome outside the screen looks frozen.
     val pageActive = LocalGlassPageActive.current
-    if (BuildConfig.DEBUG) {
+    if (GlassDebugLog) {
         val last = remember { floatArrayOf(-1f) }
         val h = scrollState.chromeHidden
         if (kotlin.math.abs(h - last[0]) > 0.02f) {
