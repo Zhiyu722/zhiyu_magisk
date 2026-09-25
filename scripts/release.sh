@@ -131,7 +131,6 @@ build() {
   $build_cmd clean
   $build_cmd all
   $build_cmd -r all
-  $build_cmd -r app-legacy
   verify_apks
 }
 
@@ -145,7 +144,7 @@ upload() {
 
   verify_apks
 
-  if [ ! -f "out/app-release.apk" ] || [ ! -f "out/apk-legacy-release.apk" ] || [ ! -f "out/app-debug.apk" ]; then
+  if [ ! -f "out/app-release.apk" ] || [ ! -f "out/app-debug.apk" ]; then
     echo "Error: Required APKs missing in out" >&2
     exit 1
   fi
@@ -159,14 +158,15 @@ upload() {
   git push origin master
   git push --tags
 
-  # Publish release
-  local release_apk="Magisk-v${ver}.apk"
-  local legacy_apk="Magisk-v${ver}-legacy.apk"
+  # Publish release (fixed naming: <version>-zhiyu(<versionCode>))
+  local name="${ver}-zhiyu(${code})"
+  local release_apk="Magisk-${name}.apk"
+  local debug_apk="Magisk-${name}-debug.apk"
   cp "out/app-release.apk" "$release_apk"
-  cp "out/apk-legacy-release.apk" "$legacy_apk"
-  gh release create --verify-tag "$tag" -d -t "$title" -F "$NOTES" "$release_apk" "$legacy_apk" "out/app-debug.apk"
+  cp "out/app-debug.apk" "$debug_apk"
+  gh release create --verify-tag "$tag" -d -t "$title" -F "$NOTES" "$release_apk" "$debug_apk"
 
-  rm -f "$release_apk" "$legacy_apk"
+  rm -f "$release_apk" "$debug_apk"
 }
 
 usage() {
