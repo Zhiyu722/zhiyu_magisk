@@ -61,6 +61,7 @@ fun InstallDialog(
     modifier: Modifier = Modifier
 ) {
     val installUiState by installVm.uiState.collectAsStateWithLifecycle()
+    var showDownloadDialog by rememberSaveable { mutableStateOf(false) }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { installVm.onPatchFileSelected(it) }
     }
@@ -84,6 +85,23 @@ fun InstallDialog(
                 installVm.install()
             }
         }
+    }
+
+    LaunchedEffect(installUiState.showDownloadDialog) {
+        if (installUiState.showDownloadDialog) {
+            showDownloadDialog = true
+            installVm.onDownloadDialogConsumed()
+        }
+    }
+
+    if (showDownloadDialog) {
+        DownloadComposableDialog(
+            onDismiss = { showDownloadDialog = false },
+            onConfirm = { url ->
+                showDownloadDialog = false
+                installVm.onDownloadUrlSelected(url)
+            }
+        )
     }
 
     if (show) {
@@ -132,6 +150,14 @@ fun InstallDialog(
                                 onClick = {
                                     onDismiss()
                                     installVm.selectMethod(InstallViewModel.Method.PATCH)
+                                },
+                            )
+
+                            SettingsArrow(
+                                title = stringResource(CoreR.string.download_patch_file),
+                                onClick = {
+                                    onDismiss()
+                                    installVm.selectMethod(InstallViewModel.Method.DOWNLOAD)
                                 },
                             )
 
