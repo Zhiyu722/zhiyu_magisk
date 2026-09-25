@@ -61,7 +61,7 @@ fun SettingsScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val scrollState = rememberScrollState()
-    val window = LocalGlassWindowInfo.current
+    val glassWindow = LocalGlassWindowInfo.current
 
     GlassScreen(
         modifier = modifier,
@@ -80,7 +80,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
                 .verticalScroll(scrollState)
-                .padding(start = window.pagePadding, end = window.pagePadding, top = 12.dp, bottom = 104.dp)
+                .padding(start = glassWindow.pagePadding, end = glassWindow.pagePadding, top = 12.dp, bottom = 104.dp)
         ) {
             CustomizationSection(viewModel = viewModel)
             Spacer(Modifier.height(16.dp))

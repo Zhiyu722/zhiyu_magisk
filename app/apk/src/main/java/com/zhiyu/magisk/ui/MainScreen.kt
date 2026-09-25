@@ -70,6 +70,7 @@ import com.zhiyu.magisk.ui.glass.GlassDefaults
 import com.zhiyu.magisk.ui.glass.GlassSurface
 import com.zhiyu.magisk.ui.glass.LocalGlassBackdrop
 import com.zhiyu.magisk.ui.glass.LocalGlassBackdropHolder
+import com.zhiyu.magisk.ui.glass.LocalGlassWindowInfo
 import com.zhiyu.magisk.ui.glass.currentBackdrop
 import com.zhiyu.magisk.ui.home.HomeScreen
 import com.zhiyu.magisk.ui.home.HomeViewModel
@@ -253,7 +254,7 @@ private fun FloatingNavigationBar(
     val holder = LocalGlassBackdropHolder.current
 
     val swiping = pagerState.isScrollInProgress
-    val window = LocalGlassWindowInfo.current
+    val glassWindow = LocalGlassWindowInfo.current
     val navScale by animateFloatAsState(if (swiping) 0.96f else 1f, label = "navScale")
     val frost = holder?.frost ?: 0f
     val slidAway = holder?.chromeHidden ?: 0f
@@ -265,8 +266,8 @@ private fun FloatingNavigationBar(
             modifier = modifier
                 .padding(
                     bottom = navBarInset + 12.dp,
-                    start = window.chromeMargin + 8.dp,
-                    end = window.chromeMargin + 8.dp
+                    start = glassWindow.chromeMargin + 8.dp,
+                    end = glassWindow.chromeMargin + 8.dp
                 )
                 // Sliding glass: like the app bar, the pill tucks itself away while the content is
                 // scrolled down and slides back in as soon as the user scrolls up again.
@@ -277,7 +278,7 @@ private fun FloatingNavigationBar(
                 }
                 .shadow(elevation = 10.dp, shape = shape, clip = false)
                 .fillMaxWidth()
-                .widthIn(max = window.chromeMaxWidth)
+                .widthIn(max = glassWindow.chromeMaxWidth)
                 .heightIn(min = 68.dp),
             shape = shape,
             blurRadius = GlassDefaults.chromeBlur * (0.6f + 0.4f * frost),

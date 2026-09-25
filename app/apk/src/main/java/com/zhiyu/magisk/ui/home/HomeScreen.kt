@@ -249,7 +249,7 @@ fun HomeScreen(
 
     val scrollState = rememberScrollState()
 
-    val window = LocalGlassWindowInfo.current
+    val glassWindow = LocalGlassWindowInfo.current
 
     GlassScreen(
         modifier = modifier,
@@ -281,7 +281,7 @@ fun HomeScreen(
                 .padding(padding)
                 .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
                 .verticalScroll(scrollState)
-                .padding(start = window.pagePadding, end = window.pagePadding, top = 12.dp, bottom = 104.dp),
+                .padding(start = glassWindow.pagePadding, end = glassWindow.pagePadding, top = 12.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (uiState.isNoticeVisible) {
