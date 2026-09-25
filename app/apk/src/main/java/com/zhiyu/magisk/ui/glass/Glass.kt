@@ -111,7 +111,7 @@ import kotlin.math.roundToInt
 internal const val GlassLogTag = "GlassScroll"
 
 /** Temporary diagnostic switch; set to false (or delete the log lines) once verified. */
-internal const val GlassDebugLog = true
+internal const val GlassDebugLog = false
 
 object GlassDefaults {
 
@@ -219,7 +219,6 @@ class GlassBackdropHolder {
     var frost: Float by mutableFloatStateOf(0f)
 
     /** How far the visible screen's chrome is slid away (0..1), for chrome outside that screen. */
-    var chromeHidden: Float by mutableFloatStateOf(0f)
 }
 
 val LocalGlassBackdropHolder = staticCompositionLocalOf<GlassBackdropHolder?> { null }
@@ -243,8 +242,7 @@ fun currentBackdrop(): GlassBackdrop? {
  *
  * * [fraction] ramps from 0 to 1 as the content scrolls away — panes use it to frost up, which
  *   keeps their text readable once content starts passing underneath them.
- * * [chromeHidden] ramps from 0 to 1 while scrolling down and back to 0 while scrolling up, so
- *   the floating app bar slides away and returns (the "sliding glass" behaviour).
+ *
  */
 class GlassScrollState internal constructor(
     private val frostDistance: Float,
@@ -252,10 +250,6 @@ class GlassScrollState internal constructor(
 ) {
     /** 0 = content resting at the top, 1 = content scrolled well past the chrome. */
     var fraction by mutableFloatStateOf(0f)
-        internal set
-
-    /** 0 = chrome fully visible, 1 = chrome completely slid away. */
-    var chromeHidden by mutableFloatStateOf(0f)
         internal set
 
     internal val connection = object : NestedScrollConnection {
@@ -282,18 +276,15 @@ class GlassScrollState internal constructor(
                 Log.d(
                     GlassLogTag,
                     "consumed=${consumed.y} available=${available.y} meaningful=$meaningful " +
-                        "frost=$fraction hidden=$chromeHidden"
                 )
             }
             if (meaningful && scrolledDown != 0f) {
-                // Scrolling down tucks the chrome away, scrolling up brings it back twice as fast
-                val step = if (scrolledDown > 0f) {
-                    scrolledDown / hideDistance
-                } else {
-                    scrolledDown / (hideDistance * 0.5f)
-                }
-                chromeHidden = (chromeHidden + step).coerceIn(0f, 1f)
+                // Frost ramps up as the content is scrolled away from the top, so the glass gets
+                // denser exactly when content starts passing underneath it.
                 fraction = (fraction + scrolledDown / frostDistance).coerceIn(0f, 1f)
+                if (GlassDebugLog) {
+                    Log.d(GlassLogTag, "frost=$fraction")
+                }
             }
             return Offset.Zero
         }
@@ -716,9 +707,6 @@ fun GlassTopAppBar(
     val density = LocalDensity.current
 
     val frost = scroll?.fraction ?: 0f
-    val hidden = scroll?.chromeHidden ?: 0f
-    val behaviourOffset = scrollBehavior?.state?.heightOffset ?: 0f
-    val barHeightPx = with(density) { (GlassAppBarHeight + topInset + 16.dp).toPx() }
 
     val surface = MaterialTheme.colorScheme.surface
     val body = surface.copy(alpha = 0.40f + 0.42f * frost)
@@ -727,12 +715,11 @@ fun GlassTopAppBar(
     // The status bar area is left clear (transparent) and the glass is a compact rounded pane
     // below it, so the pane is always exactly as big as the bar content needs — never a box
     // stretched over the status bar.
+    // Strategy (c): the bars never move. Only the content scrolls; the glass itself reacts by
+    // frosting up (denser body + stronger blur) as the content slides underneath.
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .offset {
-                IntOffset(0, (behaviourOffset - hidden * barHeightPx).roundToInt())
-            }
             .padding(top = topInset),
         contentAlignment = Alignment.Center
     ) {
@@ -797,17 +784,13 @@ fun GlassScreen(
     val pageActive = LocalGlassPageActive.current
     if (GlassDebugLog) {
         val last = remember { floatArrayOf(-1f) }
-        val h = scrollState.chromeHidden
         if (kotlin.math.abs(h - last[0]) > 0.02f) {
             last[0] = h
             Log.d(GlassLogTag, "publish pageActive=$pageActive hidden=$h")
         }
     }
     if (holder != null && pageActive) {
-        SideEffect {
-            holder.frost = scrollState.fraction
-            holder.chromeHidden = scrollState.chromeHidden
-        }
+        SideEffect { holder.frost = scrollState.fraction }
     }
     CompositionLocalProvider(
         LocalGlassScrollState provides scrollState,
