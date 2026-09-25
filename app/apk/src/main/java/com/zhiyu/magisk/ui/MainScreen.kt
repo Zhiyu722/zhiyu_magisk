@@ -287,9 +287,10 @@ private fun FloatingNavigationBar(
         ) {
             Row(
                 modifier = Modifier
-                    // fillMaxSize() (not matchParentSize()) so the row actually gets the
-                    // 68.dp height of the pill instead of being measured to zero.
-                    .fillMaxSize()
+                    // fillMaxWidth + heightIn (never fillMaxSize): the pill must stay a pill.
+                    // fillMaxSize() inside a heightIn(min) pane expands to the whole screen.
+                    .fillMaxWidth()
+                    .heightIn(min = 68.dp)
                     .padding(horizontal = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
