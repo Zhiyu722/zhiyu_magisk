@@ -782,13 +782,6 @@ fun GlassScreen(
     // scroll state — otherwise an off-screen page (which never scrolls) overwrites it and the
     // chrome outside the screen looks frozen.
     val pageActive = LocalGlassPageActive.current
-    if (GlassDebugLog) {
-        val last = remember { floatArrayOf(-1f) }
-        if (kotlin.math.abs(h - last[0]) > 0.02f) {
-            last[0] = h
-            Log.d(GlassLogTag, "publish pageActive=$pageActive hidden=$h")
-        }
-    }
     if (holder != null && pageActive) {
         SideEffect { holder.frost = scrollState.fraction }
     }
