@@ -1,6 +1,7 @@
 package com.zhiyu.magisk.ui.glass
 
 import android.os.Build
+import android.util.Log
 import android.content.res.Configuration
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -75,6 +76,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.zhiyu.magisk.BuildConfig
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -107,6 +109,8 @@ import kotlin.math.roundToInt
  * silently skipped and panes fall back to a translucent tinted surface with a bright hairline
  * edge, which still reads as glass.
  */
+internal const val GlassLogTag = "GlassScroll"
+
 object GlassDefaults {
 
     /** Corner radius of the large panes (cards, sheets). */
@@ -264,6 +268,9 @@ class GlassScrollState internal constructor(
                 val step = if (dy > 0f) dy / hideDistance else dy / (hideDistance * 0.5f)
                 chromeHidden = (chromeHidden + step).coerceIn(0f, 1f)
                 fraction = (fraction + dy / frostDistance).coerceIn(0f, 1f)
+                if (BuildConfig.DEBUG) {
+                    Log.d(GlassLogTag, "scroll dy=$dy frost=$fraction hidden=$chromeHidden")
+                }
             }
             return Offset.Zero
         }
@@ -765,6 +772,14 @@ fun GlassScreen(
     // scroll state — otherwise an off-screen page (which never scrolls) overwrites it and the
     // chrome outside the screen looks frozen.
     val pageActive = LocalGlassPageActive.current
+    if (BuildConfig.DEBUG) {
+        val last = remember { floatArrayOf(-1f) }
+        val h = scrollState.chromeHidden
+        if (kotlin.math.abs(h - last[0]) > 0.02f) {
+            last[0] = h
+            Log.d(GlassLogTag, "publish pageActive=$pageActive hidden=$h")
+        }
+    }
     if (holder != null && pageActive) {
         SideEffect {
             holder.frost = scrollState.fraction
