@@ -281,6 +281,14 @@ fun rememberGlassScrollState(): GlassScrollState {
     }
 }
 
+/**
+ * Whether the surrounding screen is the one the user is currently looking at. Inside a pager every
+ * page is composed at once, so only the active page may publish its scroll state to the shared
+ * [GlassBackdropHolder]; otherwise an off-screen page (which never scrolls) would overwrite it and
+ * chrome living outside the screen — the floating navigation bar — would look frozen.
+ */
+val LocalGlassPageActive = staticCompositionLocalOf { true }
+
 /** Scroll state of the surrounding [GlassScreen]; `null` outside of one. */
 val LocalGlassScrollState = staticCompositionLocalOf<GlassScrollState?> { null }
 
@@ -680,45 +688,55 @@ fun GlassTopAppBar(
     val frost = scroll?.fraction ?: 0f
     val hidden = scroll?.chromeHidden ?: 0f
     val behaviourOffset = scrollBehavior?.state?.heightOffset ?: 0f
-    val barHeightPx = with(density) { (GlassAppBarHeight + topInset).toPx() }
+    val barHeightPx = with(density) { (GlassAppBarHeight + topInset + 16.dp).toPx() }
 
     val surface = MaterialTheme.colorScheme.surface
     val body = surface.copy(alpha = 0.40f + 0.42f * frost)
     val blurRadius = GlassDefaults.chromeBlur * (0.55f + 0.45f * frost)
 
-    GlassSurface(
-        modifier = modifier
+    // The status bar area is left clear (transparent) and the glass is a compact rounded pane
+    // below it, so the pane is always exactly as big as the bar content needs — never a box
+    // stretched over the status bar.
+    Box(
+        modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = GlassAppBarHeight + topInset)
             .offset {
                 IntOffset(0, (behaviourOffset - hidden * barHeightPx).roundToInt())
-            },
-        shape = GlassDefaults.chromeShape,
-        blurRadius = blurRadius,
-        refraction = GlassDefaults.noRefraction,
-        body = body
+            }
+            .padding(top = topInset),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier
+        GlassSurface(
+            modifier = modifier
                 .fillMaxWidth()
-                .padding(top = topInset, start = sideInsetStart, end = sideInsetEnd)
-                // heightIn (not height) so a larger system font scale grows the bar instead of
-                // clipping the title.
-                .heightIn(min = GlassAppBarHeight)
-                .widthIn(max = window.chromeMaxWidth)
-                .align(Alignment.Center)
-                .padding(start = window.pagePadding, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .widthIn(max = window.chromeMaxWidth),
+            shape = GlassDefaults.chromeShape,
+            blurRadius = blurRadius,
+            refraction = GlassDefaults.noRefraction,
+            body = body
         ) {
-            navigationIcon()
-            CompositionLocalProvider(
-                LocalContentColor provides MaterialTheme.colorScheme.onSurface
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // heightIn (not height) so a larger system font scale grows the bar instead of
+                    // clipping the title.
+                    .heightIn(min = GlassAppBarHeight)
+                    .padding(
+                        start = window.pagePadding + sideInsetStart,
+                        end = 4.dp + sideInsetEnd
+                    ),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ProvideTextStyle(value = MaterialTheme.typography.titleLarge) {
-                    title()
+                navigationIcon()
+                CompositionLocalProvider(
+                    LocalContentColor provides MaterialTheme.colorScheme.onSurface
+                ) {
+                    ProvideTextStyle(value = MaterialTheme.typography.titleLarge) {
+                        title()
+                    }
+                    Spacer(Modifier.weight(1f))
+                    actions()
                 }
-                Spacer(Modifier.weight(1f))
-                actions()
             }
         }
     }
@@ -746,11 +764,8 @@ fun GlassScreen(
     // Every pager page is composed at once, so only the page actually on screen may publish its
     // scroll state — otherwise an off-screen page (which never scrolls) overwrites it and the
     // chrome outside the screen looks frozen.
-    var positionX by remember { mutableFloatStateOf(0f) }
-    val halfScreen = with(LocalDensity.current) {
-        LocalConfiguration.current.screenWidthDp.dp.toPx() / 2
-    }
-    if (holder != null && abs(positionX) < halfScreen) {
+    val pageActive = LocalGlassPageActive.current
+    if (holder != null && pageActive) {
         SideEffect {
             holder.frost = scrollState.fraction
             holder.chromeHidden = scrollState.chromeHidden
@@ -774,7 +789,6 @@ fun GlassScreen(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .onGloballyPositioned { positionX = it.positionInRoot().x }
                             .nestedScroll(scrollState.connection)
                             .then(source)
                     ) {

@@ -70,6 +70,7 @@ import com.zhiyu.magisk.ui.glass.GlassDefaults
 import com.zhiyu.magisk.ui.glass.GlassSurface
 import com.zhiyu.magisk.ui.glass.LocalGlassBackdrop
 import com.zhiyu.magisk.ui.glass.LocalGlassBackdropHolder
+import com.zhiyu.magisk.ui.glass.LocalGlassPageActive
 import com.zhiyu.magisk.ui.glass.LocalGlassWindowInfo
 import com.zhiyu.magisk.ui.glass.currentBackdrop
 import com.zhiyu.magisk.ui.home.HomeScreen
@@ -139,6 +140,9 @@ fun MainScreen(
                 userScrollEnabled = true,
             ) { page ->
                 val isCurrentPage = pagerState.currentPage == page
+                // Only the visible page publishes its scroll state, so the floating pill outside
+                // the pager follows the page the user is actually looking at.
+                CompositionLocalProvider(LocalGlassPageActive provides isCurrentPage) {
                 when (visibleTabs[page]) {
                     Tab.HOME -> {
                         val vm: HomeViewModel = viewModel(factory = VMFactory)
@@ -196,6 +200,7 @@ fun MainScreen(
                         CollectNavEvents(vm, navigator)
                         SettingsScreen(vm)
                     }
+                }
                 }
             }
             }
