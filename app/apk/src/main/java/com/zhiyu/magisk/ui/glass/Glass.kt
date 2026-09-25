@@ -111,7 +111,7 @@ import kotlin.math.roundToInt
 internal const val GlassLogTag = "GlassScroll"
 
 /** Temporary diagnostic switch; set to false (or delete the log lines) once verified. */
-internal const val GlassDebugLog = true
+internal const val GlassDebugLog = false
 
 object GlassDefaults {
 
