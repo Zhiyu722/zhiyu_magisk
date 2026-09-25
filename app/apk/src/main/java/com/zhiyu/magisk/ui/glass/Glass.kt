@@ -268,6 +268,13 @@ class GlassScrollState internal constructor(
             // content down), so the amount that means "scrolled down" is -consumed.y. Using the raw
             // value would clamp the state to 0 forever and the chrome would never move.
             val scrolledDown = -consumed.y
+            if (GlassDebugLog) {
+                Log.d(
+                    GlassLogTag,
+                    "consumed=${consumed.y} available=${available.y} " +
+                        "down=$scrolledDown frost=$fraction hidden=$chromeHidden"
+                )
+            }
             if (scrolledDown != 0f) {
                 // Scrolling down tucks the chrome away, scrolling up brings it back twice as fast
                 val step = if (scrolledDown > 0f) {
@@ -277,9 +284,6 @@ class GlassScrollState internal constructor(
                 }
                 chromeHidden = (chromeHidden + step).coerceIn(0f, 1f)
                 fraction = (fraction + scrolledDown / frostDistance).coerceIn(0f, 1f)
-                if (GlassDebugLog) {
-                    Log.d(GlassLogTag, "scroll down=$scrolledDown frost=$fraction hidden=$chromeHidden")
-                }
             }
             return Offset.Zero
         }
