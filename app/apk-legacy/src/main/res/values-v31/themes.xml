@@ -8,7 +8,7 @@
 
     <style name="ThemeOverlay.Foundation.Dialog" parent="Base.V23.ThemeOverlay.Foundation.Dialog">
         <item name="android:windowBlurBehindEnabled">true</item>
-        <item name="android:windowBlurBehindRadius">24</item>
+        <item name="android:windowBlurBehindRadius">24dp</item>
     </style>
 
 </resources>
