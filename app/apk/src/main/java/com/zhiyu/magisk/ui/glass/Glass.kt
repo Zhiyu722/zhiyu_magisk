@@ -253,38 +253,20 @@ class GlassScrollState internal constructor(
         internal set
 
     internal val connection = object : NestedScrollConnection {
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            if (GlassDebugLog) Log.d(GlassLogTag, "pre available=${available.y} source=$source")
-            return Offset.Zero
-        }
-
         override fun onPostScroll(
             consumed: Offset,
             available: Offset,
             source: NestedScrollSource
         ): Offset {
-            // Compose reports consumed.y as *negative* while the user swipes up (which scrolls the
-            // content down), so the amount that means "scrolled down" is -consumed.y. Using the raw
-            // value would clamp the state to 0 forever and the chrome would never move.
-            // Only deltas the content actually consumed tell us the scroll direction. When nothing
+            // Only deltas the content actually consumed tell us the scroll direction: when nothing
             // consumed them (empty list, overscroll bounce) available != 0 and the sign is not
-            // meaningful — counting those is what kept the state pinned at 0 before.
-            // Convention: positive consumed.y == the content scrolled down.
+            // meaningful. Convention: positive consumed.y == the content scrolled down.
             val scrolledDown = consumed.y
             val meaningful = available.y == 0f
-            if (GlassDebugLog) {
-                Log.d(
-                    GlassLogTag,
-                    "consumed=${consumed.y} available=${available.y} meaningful=$meaningful " +
-                )
-            }
             if (meaningful && scrolledDown != 0f) {
                 // Frost ramps up as the content is scrolled away from the top, so the glass gets
                 // denser exactly when content starts passing underneath it.
                 fraction = (fraction + scrolledDown / frostDistance).coerceIn(0f, 1f)
-                if (GlassDebugLog) {
-                    Log.d(GlassLogTag, "frost=$fraction")
-                }
             }
             return Offset.Zero
         }
