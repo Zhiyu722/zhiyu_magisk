@@ -15,6 +15,7 @@ compose-m3 = "1.4.0"
 navigation3 = "1.1.7"
 navigationevent = "1.1.2"
 wire = "6.4.7"
+backdrop = "2.0.1"
 
 [libraries]
 bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version = "1.85" }
@@ -79,6 +80,9 @@ lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecycle-viewm
 navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
 navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 navigationevent-compose = { module = "androidx.navigationevent:navigationevent-compose", version.ref = "navigationevent" }
+
+# Liquid glass, by Kyant0 (https://github.com/Kyant0/AndroidLiquidGlass)
+kyant-backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
 
 # For build-logic
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "android" }

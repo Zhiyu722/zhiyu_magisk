@@ -3,6 +3,7 @@ package com.zhiyu.magisk.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -12,6 +13,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,11 +58,18 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zhiyu.magisk.R
 import com.zhiyu.magisk.arch.VMFactory
@@ -73,6 +83,7 @@ import com.zhiyu.magisk.ui.glass.LocalGlassBackdropHolder
 import com.zhiyu.magisk.ui.glass.LocalGlassPageActive
 import com.zhiyu.magisk.ui.glass.LocalGlassWindowInfo
 import com.zhiyu.magisk.ui.glass.currentBackdrop
+import com.zhiyu.magisk.ui.glass.quantiseFrost
 import com.zhiyu.magisk.ui.home.HomeScreen
 import com.zhiyu.magisk.ui.home.HomeViewModel
 import com.zhiyu.magisk.ui.install.InstallViewModel
@@ -136,7 +147,11 @@ fun MainScreen(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = visibleTabs.size - 1,
+                // Keep only the immediate neighbours composed. Pre-composing *every* page
+                // (`pageCount - 1`) costs one full-screen glass backdrop, one animated gradient
+                // background and one screen loading its data per tab, all at the same time, which
+                // is what made dragging the pager stutter.
+                beyondViewportPageCount = 1,
                 userScrollEnabled = true,
             ) { page ->
                 val isCurrentPage = pagerState.currentPage == page
@@ -236,6 +251,89 @@ fun MainScreen(
 }
 
 /**
+ * How the pager travels when a tab is tapped on the floating bar.
+ *
+ * Deliberately brisk and *constant* rather than distance-scaled: the pager composes every page it
+ * flies past, so stretching a long jump over a proportionally long animation just multiplies the
+ * per-frame work for a distance the user did not ask to sit through.
+ */
+private val PagerSlide = tween<Float>(durationMillis = 300, easing = FastOutSlowInEasing)
+
+/** A flick faster than this (px/s) wins over wherever the pill happened to be dragged. */
+private const val PagerFlingVelocity = 800f
+
+/**
+ * Lets a horizontal drag across the floating bar page through the tabs, the way flicking the pager
+ * itself does.
+ *
+ * Handled on the **initial** dispatch pass on purpose. Every icon in the bar is `clickable`, and a
+ * clickable child consumes the pointer down before an ancestor ever gets a look at it, so a plain
+ * `draggable` on the container never sees the gesture. Watching the initial pass means this node
+ * inspects every event on the way *down* the tree, before the icons can take it.
+ *
+ * Until the finger travels past touch slop nothing is consumed, so a plain tap still reaches the
+ * icons and selects a tab. Past the slop the movement is consumed — which cancels the pending tap —
+ * and pushed into the pager with `dispatchRawDelta`, avoiding one coroutine per frame so the pages
+ * genuinely track the finger. On release the flick velocity picks the page, falling back to
+ * whichever page the drag left the pager closest to.
+ */
+private fun Modifier.pagerDrag(
+    pagerState: PagerState,
+    pageWidth: Float
+): Modifier = pointerInput(pagerState, pageWidth) {
+    val slop = viewConfiguration.touchSlop
+    while (true) {
+        // The gesture loop has to live inside awaitPointerEventScope, but settling the pager is a
+        // regular suspend call — so the scope only *decides* the landing page and reports it back.
+        val landing = awaitPointerEventScope {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // The page the gesture started from. Deriving the destination from this instead of the
+            // live currentPage keeps the outcome predictable: raw deltas already move the pager
+            // mid-drag, so currentPage can cross into the next page before the finger lifts.
+            val startPage = pagerState.currentPage
+            val tracker = VelocityTracker()
+            var dragging = false
+            var travelled = 0f
+
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                tracker.addPointerInputChange(change)
+
+                val dx = change.positionChange().x
+                // Total finger travel decides the landing page, so it has to keep accumulating for
+                // the whole gesture — not merely until the drag is first recognised.
+                travelled += dx
+                // Wait for real movement before stealing the gesture from the icons.
+                if (!dragging && abs(travelled) > slop) dragging = true
+                if (dragging) {
+                    change.consume()
+                    pagerState.dispatchRawDelta(-dx)
+                }
+            }
+
+            if (!dragging) {
+                null
+            } else {
+                val draggedPages = -travelled / pageWidth
+                val velocity = tracker.calculateVelocity().x
+                val flicked = when {
+                    velocity > PagerFlingVelocity -> -1
+                    velocity < -PagerFlingVelocity -> 1
+                    else -> 0
+                }
+                // A flick decides outright; otherwise land on the page the finger dragged towards.
+                val step = if (flicked != 0) flicked else draggedPages.roundToInt()
+                val settled = (startPage + step).coerceIn(0, pagerState.pageCount - 1)
+                settled
+            }
+        }
+        landing?.let { pagerState.animateScrollToPage(it, animationSpec = PagerSlide) }
+    }
+}
+
+/**
  * The floating navigation bar, turned into a frosted glass pill.
  *
  * It is composed in the [Scaffold]'s `bottomBar` slot, i.e. *after* the pager content, so it can
@@ -253,13 +351,20 @@ private fun FloatingNavigationBar(
     val scope = rememberCoroutineScope()
     val shape = GlassDefaults.chromeShape
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // Drag distance is measured against a whole page, so sliding the pill across its own width
+    // pages once, just like dragging the content would.
+    val density = LocalDensity.current
+    val windowInfo = LocalWindowInfo.current
+    val pageWidth = with(density) { windowInfo.containerSize.width.toFloat() }
     // The floating bar lives outside the screen it blurs, so it borrows the backdrop
     // published by the currently visible tab.
     val backdrop = currentBackdrop()
     val holder = LocalGlassBackdropHolder.current
 
     val glassWindow = LocalGlassWindowInfo.current
-    val frost = holder?.frost ?: 0f
+    // Quantised: the pill would otherwise rebuild its blur and re-lay-out its icons on every
+    // scroll frame of the page underneath.
+    val frost = quantiseFrost(holder?.frost ?: 0f)
     val body = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f + 0.30f * frost)
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
@@ -273,10 +378,10 @@ private fun FloatingNavigationBar(
                 .shadow(elevation = 10.dp, shape = shape, clip = false)
                 .fillMaxWidth()
                 .widthIn(max = glassWindow.chromeMaxWidth)
-                .heightIn(min = 68.dp),
+                .heightIn(min = 68.dp)
+                .pagerDrag(pagerState, pageWidth),
             shape = shape,
             blurRadius = GlassDefaults.chromeBlur * (0.6f + 0.4f * frost),
-            refraction = GlassDefaults.noRefraction,
             body = body
         ) {
             Row(
@@ -295,7 +400,11 @@ private fun FloatingNavigationBar(
                         label = stringResource(tab.titleRes),
                         selected = pagerState.currentPage == index,
                         enabled = true,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        onClick = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(index, animationSpec = PagerSlide)
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }

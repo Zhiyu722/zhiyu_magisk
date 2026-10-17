@@ -123,11 +123,50 @@ class TerminalColorScheme {
         }
     }
 
+    /**
+     * Repaints the console for the app theme.
+     *
+     * The log console is part of the glass UI, so instead of the stock black terminal it uses the
+     * same light purple wash as the home page. A white-on-black palette would be unreadable on that
+     * wash, so the near-white ANSI entries are darkened along with the default colours.
+     *
+     * @return the background colour, so the caller can paint a matching backdrop behind the text.
+     */
+    fun applyAppTheme(dark: Boolean): Int {
+        reset()
+        val foreground: Int
+        val background: Int
+        if (dark) {
+            foreground = DARK_FOREGROUND
+            background = DARK_BACKGROUND
+        } else {
+            foreground = LIGHT_FOREGROUND
+            background = LIGHT_BACKGROUND
+            // Dim white (7), medium grey (8) and bright white (15) would vanish on the light wash.
+            defaultColors[7] = 0xFF5A5470.toInt()
+            defaultColors[8] = 0xFF6E6885.toInt()
+            defaultColors[15] = LIGHT_FOREGROUND
+        }
+        defaultColors[TextStyle.COLOR_INDEX_FOREGROUND] = foreground
+        defaultColors[TextStyle.COLOR_INDEX_BACKGROUND] = background
+        defaultColors[TextStyle.COLOR_INDEX_CURSOR] = foreground
+        return background
+    }
+
     private fun reset() {
         System.arraycopy(DEFAULT_COLORSCHEME, 0, defaultColors, 0, TextStyle.NUM_INDEXED_COLORS)
     }
 
     companion object {
+
+        /** Light purple console wash, matching the home page glass. */
+        val LIGHT_BACKGROUND = 0xFFEDE7F6.toInt()
+        val LIGHT_FOREGROUND = 0xFF2A2140.toInt()
+
+        /** Deep purple rather than pure black, for the dark theme. */
+        val DARK_BACKGROUND = 0xFF17122B.toInt()
+        val DARK_FOREGROUND = 0xFFEDE7F6.toInt()
+
         private val DEFAULT_COLORSCHEME = longArrayOf(
             // 16 original colors. First 8 are dim.
             0xff000000, // black

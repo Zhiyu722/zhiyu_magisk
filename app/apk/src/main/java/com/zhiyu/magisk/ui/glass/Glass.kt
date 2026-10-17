@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
@@ -47,36 +49,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import kotlin.math.abs
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import kotlin.math.roundToInt
 
 /**
@@ -110,8 +107,17 @@ import kotlin.math.roundToInt
  */
 internal const val GlassLogTag = "GlassScroll"
 
-/** Temporary diagnostic switch; set to false (or delete the log lines) once verified. */
-internal const val GlassDebugLog = false
+/**
+ * Snaps a continuously varying 0..1 value (the "frost" level, driven by scroll position) to a few
+ * discrete steps.
+ *
+ * Frost feeds a blur radius and a tint alpha. Left continuous it changes on every frame of a
+ * gesture, which rebuilds the render-effect chain and recomposes the whole chrome — the single most
+ * expensive thing the glass does while the user is swiping. [steps] + 1 levels are indistinguishable
+ * from a smooth ramp to the eye but collapse that work to a handful of updates per gesture.
+ */
+internal fun quantiseFrost(value: Float, steps: Int = 5): Float =
+    (value.coerceIn(0f, 1f) * steps).roundToInt() / steps.toFloat()
 
 object GlassDefaults {
 
@@ -133,11 +139,20 @@ object GlassDefaults {
     /** Hairline border width. */
     val border: Dp = 1.dp
 
-    /** Slight magnification of the backdrop copy — the "lens" of liquid glass. */
-    const val refraction: Float = 1.02f
+    /**
+     * Strength of the edge lens — the refraction that bends the backdrop at the pane's border.
+     * `1f` is the standard strength; `0f` disables the lens and leaves a plain frosted blur.
+     */
+    const val refraction: Float = 1f
 
-    /** No magnification; used for wide chrome where a lens would look wrong. */
-    const val noRefraction: Float = 1f
+    /** No lens at all, for panes where bending the backdrop at the edge would be distracting. */
+    const val noRefraction: Float = 0f
+
+    /** How far into the pane the lens starts bending the backdrop. */
+    val lensHeight: Dp = 12.dp
+
+    /** How far the lens displaces the backdrop at the very edge of the pane. */
+    val lensAmount: Dp = 24.dp
 }
 
 /**
@@ -203,7 +218,7 @@ fun rememberGlassWindowInfo(): GlassWindowInfo {
 val LocalGlassDarkTheme = staticCompositionLocalOf { true }
 
 /** The recorded backdrop that glass panes sample from. */
-class GlassBackdrop internal constructor(internal val layer: GraphicsLayer)
+class GlassBackdrop internal constructor(internal val layer: LayerBackdrop)
 
 /** `null` when the current screen has no backdrop source; glass then degrades to a flat tint. */
 val LocalGlassBackdrop = staticCompositionLocalOf<GlassBackdrop?> { null }
@@ -295,32 +310,25 @@ val LocalGlassPageActive = staticCompositionLocalOf { true }
 /** Scroll state of the surrounding [GlassScreen]; `null` outside of one. */
 val LocalGlassScrollState = staticCompositionLocalOf<GlassScrollState?> { null }
 
-private fun Modifier.recordBackdrop(layer: GraphicsLayer): Modifier = drawWithContent {
-    layer.record(
-        this,
-        this.layoutDirection,
-        IntSize(size.width.toInt(), size.height.toInt())
-    ) {
-        this@drawWithContent.drawContent()
-    }
-    drawLayer(layer)
-}
-
 /**
  * Records [content] into a graphics layer, publishes it through [LocalGlassBackdrop] (and the
  * enclosing [GlassBackdropHolder] when there is one) and hands the modifier that performs the
  * recording to [content], which must apply it to the layout node that should be recorded.
+ *
+ * Both the recording and the refraction that reads it back are handled by the liquid glass engine
+ * (Kyant0/AndroidLiquidGlass): [rememberLayerBackdrop] owns the captured layer and
+ * [Modifier.layerBackdrop] feeds it.
  */
 @Composable
 fun GlassBackdropHost(content: @Composable (source: Modifier) -> Unit) {
-    val layer = rememberGraphicsLayer()
+    val layer = rememberLayerBackdrop()
     val backdrop = remember(layer) { GlassBackdrop(layer) }
     val holder = LocalGlassBackdropHolder.current
     if (holder != null) {
         SideEffect { holder.backdrop = backdrop }
     }
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
-        content(Modifier.recordBackdrop(layer))
+        content(Modifier.layerBackdrop(layer))
     }
 }
 
@@ -345,15 +353,18 @@ private val canBlurBackdrop: Boolean
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 /**
- * The colourful animated backdrop the glass refracts. Paint it behind the screen content.
+ * The two drift phases of the animated backdrop.
  *
- * The colours follow the active Material theme (including dynamic colour), so every Magisk
- * colour mode keeps working.
+ * The animation is deliberately *not* created for off-screen pages. Inside the pager every page is
+ * composed, and an infinite transition keeps invalidating its own draw on every frame — with a
+ * handful of pages that means several full-screen gradient repaints per frame forever, which is
+ * what makes the pager feel sluggish. An inactive page therefore renders the backdrop frozen at a
+ * mid-way phase: identical pixels, no animation clock, no invalidation.
  */
 @Composable
-fun GlassBackground(modifier: Modifier = Modifier) {
-    val dark = LocalGlassDarkTheme.current
-    val scheme = MaterialTheme.colorScheme
+private fun rememberGlassDrift(active: Boolean): Pair<Float, Float> {
+    if (!active) return 0.5f to 0.5f
+
     val transition = rememberInfiniteTransition(label = "glassBackdrop")
 
     val drift by transition.animateFloat(
@@ -374,6 +385,20 @@ fun GlassBackground(modifier: Modifier = Modifier) {
         ),
         label = "drift2"
     )
+    return drift to drift2
+}
+
+/**
+ * The colourful animated backdrop the glass refracts. Paint it behind the screen content.
+ *
+ * The colours follow the active Material theme (including dynamic colour), so every Magisk
+ * colour mode keeps working.
+ */
+@Composable
+fun GlassBackground(modifier: Modifier = Modifier) {
+    val dark = LocalGlassDarkTheme.current
+    val scheme = MaterialTheme.colorScheme
+    val (drift, drift2) = rememberGlassDrift(LocalGlassPageActive.current)
 
     val base = if (dark) Color(0xFF070A12) else Color(0xFFF3F6FD)
     val baseBottom = if (dark) Color(0xFF0E1122) else Color(0xFFE6EDFA)
@@ -569,57 +594,60 @@ fun GlassSurface(
 ) {
     val backdrop = LocalGlassBackdrop.current
     val dark = LocalGlassDarkTheme.current
-    var positionInRoot by remember { mutableStateOf(Offset.Zero) }
-    val blurred = backdrop != null && canBlurBackdrop && blurRadius > 0.dp
+    val lensStrength = refraction.coerceIn(0f, 1f)
+    // Panes that live *inside* the recording must not sample it: the layer would be fed back into
+    // itself and the pane would smear its own previous frame. Only chrome drawn after the
+    // recording (app bars, the floating navigation bar, dialogs) passes a non-zero radius.
+    val frosted = backdrop != null && canBlurBackdrop && blurRadius > 0.dp
+    // The engine only implements refraction for rounded shapes; anything else falls back to blur.
+    val supportsLens = shape is CornerBasedShape || shape is AbsoluteRoundedCornerShape
 
-    Box(
-        modifier = modifier
-            .onGloballyPositioned { positionInRoot = it.positionInRoot() }
-            .clip(shape)
-    ) {
-        // 1. Blurred copy of everything behind this pane
-        if (blurred) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .blur(blurRadius, BlurredEdgeTreatment.Unbounded)
-                    .drawWithContent {
-                        val layerTopLeft = backdrop!!.layer.topLeft
-                        val dx = layerTopLeft.x - positionInRoot.x
-                        val dy = layerTopLeft.y - positionInRoot.y
-                        withTransform({
-                            translate(dx, dy)
-                            if (refraction != 1f) {
-                                scale(
-                                    scaleX = refraction,
-                                    scaleY = refraction,
-                                    pivot = center
-                                )
-                            }
-                        }) {
-                            drawLayer(backdrop.layer)
-                        }
-                    }
-            )
-        }
-
-        // 2. Glass tint and edge — above the blur, below the content
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .drawWithContent {
-                    drawContent()
-                    drawGlassDecoration(
-                        shape = RectangleShape,
-                        borderWidth = if (border) borderWidth else 0.dp,
-                        dark = dark,
-                        tint = tint,
-                        body = body
+    val pane = if (frosted) {
+        // Real liquid glass: the backdrop is bent at the pane's edge by a runtime shader, blurred,
+        // saturated, and finished off with the engine's own specular highlight and drop shadow.
+        modifier.drawBackdrop(
+            backdrop = backdrop.layer,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(blurRadius.toPx())
+                if (lensStrength > 0f && supportsLens) {
+                    lens(
+                        refractionHeight = GlassDefaults.lensHeight.toPx() * lensStrength,
+                        refractionAmount = GlassDefaults.lensAmount.toPx() * lensStrength
                     )
                 }
+            },
+            onDrawSurface = {
+                drawGlassDecoration(
+                    shape = shape,
+                    borderWidth = if (border) borderWidth else 0.dp,
+                    dark = dark,
+                    tint = tint,
+                    body = body
+                )
+            }
         )
+    } else {
+        // No usable backdrop (or Android 11 and below): a translucent tinted pane with a bright
+        // hairline edge, which still reads as glass.
+        modifier
+            .clip(shape)
+            .drawWithContent {
+                // Tint and edge first, so the content stays on top and is never washed out.
+                drawGlassDecoration(
+                    shape = shape,
+                    borderWidth = if (border) borderWidth else 0.dp,
+                    dark = dark,
+                    tint = tint,
+                    body = body
+                )
+                drawContent()
+            }
+    }
 
-        // 3. Content (this is what sizes the pane)
+    // The content is what sizes the pane; the glass above is drawn by the modifier.
+    Box(modifier = pane) {
         Box(
             modifier = Modifier.padding(contentPadding),
             content = content
@@ -688,7 +716,7 @@ fun GlassTopAppBar(
     val scroll = LocalGlassScrollState.current
     val density = LocalDensity.current
 
-    val frost = scroll?.fraction ?: 0f
+    val frost = quantiseFrost(scroll?.fraction ?: 0f)
 
     val surface = MaterialTheme.colorScheme.surface
     val body = surface.copy(alpha = 0.40f + 0.42f * frost)
@@ -711,7 +739,6 @@ fun GlassTopAppBar(
                 .widthIn(max = window.chromeMaxWidth),
             shape = GlassDefaults.chromeShape,
             blurRadius = blurRadius,
-            refraction = GlassDefaults.noRefraction,
             body = body
         ) {
             Row(

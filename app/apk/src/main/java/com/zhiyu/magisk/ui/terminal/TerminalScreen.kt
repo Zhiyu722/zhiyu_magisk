@@ -25,9 +25,12 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.withTranslation
+import com.zhiyu.magisk.terminal.TerminalColorScheme
+import com.zhiyu.magisk.terminal.TerminalColors
 import com.zhiyu.magisk.terminal.TerminalEmulator
 import com.zhiyu.magisk.ui.component.terminalHorizontalScrollbar
 import com.zhiyu.magisk.ui.component.terminalScrollbar
+import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
 import kotlin.math.max
 
 private const val MIN_TERMINAL_COLUMNS = 256
@@ -38,6 +41,12 @@ fun TerminalScreen(
     onEmulatorCreated: (TerminalEmulator) -> Unit = {},
 ) {
     val density = LocalDensity.current
+    val dark = LocalGlassDarkTheme.current
+    // The console paints itself, so its backdrop must be the same colour the palette calls the
+    // default background — otherwise cells would not blend into the area around them.
+    val consoleBackground = Color(
+        if (dark) TerminalColorScheme.DARK_BACKGROUND else TerminalColorScheme.LIGHT_BACKGROUND
+    )
     val renderer = remember {
         val textSizePx = with(density) { 12.sp.toPx().toInt() }
         TerminalRenderer(textSizePx, Typeface.MONOSPACE)
@@ -63,7 +72,9 @@ fun TerminalScreen(
         val contentWidthPx = maxOf(widthPx, (maxUsedCol + 2) * renderer.fontWidth)
         val maxScrollX = maxOf(0f, contentWidthPx - widthPx)
 
-        LaunchedEffect(cols, rows) {
+        LaunchedEffect(cols, rows, dark) {
+            // Repaint the palette before the emulator copies it, and again when the theme flips.
+            TerminalColors.COLOR_SCHEME.applyAppTheme(dark)
             val emu = emulator
             if (emu == null) {
                 val newEmu = TerminalEmulator(cols, rows, renderer.fontWidth.toInt(), renderer.fontLineSpacing, null)
@@ -75,6 +86,7 @@ fun TerminalScreen(
                 onEmulatorCreated(newEmu)
             } else {
                 emu.resize(cols, rows, renderer.fontWidth.toInt(), renderer.fontLineSpacing)
+                emu.mColors.reset()
             }
         }
 
@@ -106,7 +118,7 @@ fun TerminalScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .clipToBounds()
-                .background(Color.Black)
+                .background(consoleBackground)
                 .terminalScrollbar(
                     activeTranscriptRows = activeTranscriptRows,
                     topRow = topRow,

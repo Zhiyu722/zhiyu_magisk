@@ -54,4 +54,7 @@ dependencies {
     implementation(libs.navigationevent.compose)
     implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.navigation3.ui)
+
+    // Liquid glass effect engine (Kyant0/AndroidLiquidGlass)
+    implementation(libs.kyant.backdrop)
 }
