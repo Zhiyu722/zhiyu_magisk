@@ -20,15 +20,17 @@ android {
     // stub would have installed an unrelated manager instead of upgrading itself.
     //
     // The file name has to match what the release workflow publishes. That workflow names the APK
-    // Magisk-<short version>-zhiyu(<versionCode>).apk, deriving the short version from the
-    // versionCode (31000 -> 31); GitHub then rewrites the parentheses to dots as it uploads, so the
-    // asset that actually resolves is Magisk-31-zhiyu.31000.apk.
+    // Magisk-<version>-zhiyu(<versionCode>).apk, where <version> is the same string
+    // scripts/version.py produces from the version code (31000 -> "31.0"). GitHub rewrites the
+    // parentheses to dots as it uploads, so the asset that actually resolves is
+    // Magisk-31.0-zhiyu.31000.apk. Keep this in step with scripts/version.py.
     val versionCodeValue = Config.versionCode
+    val major = versionCodeValue / 1000
     val minor = versionCodeValue % 1000
     val shortVersion = if (minor == 0) {
-        "${versionCodeValue / 1000}"
+        "$major.0"
     } else {
-        "${versionCodeValue / 1000}." + minor.toString().padStart(3, '0').trimEnd('0')
+        "$major." + minor.toString().padStart(3, '0').trimEnd('0')
     }
     val url = "https://github.com/Zhiyu722/zhiyu_magisk/releases/download/" +
         "v${Config.version}/Magisk-$shortVersion-zhiyu.$versionCodeValue.apk"

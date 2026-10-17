@@ -62,8 +62,7 @@ jobs:
             echo "!! decoded keystore is empty" >&2
             exit 1
           fi
-          VERSION=$(sed -n 's/^magisk\.versionCode=//p' app/gradle.properties | head -n1 | tr -d '[:space:]')
-          VERSION=$(python3 -c "import sys; print(f'{int(sys.argv[1]) / 1000:g}')" "$VERSION")
+          VERSION=$(python3 scripts/version.py "$(sed -n 's/^magisk\.versionCode=//p' app/gradle.properties | head -n1 | tr -d '[:space:]')")
           echo "== signing with alias $KEY_ALIAS, version $VERSION"
           {
             echo "version=$VERSION"
@@ -93,7 +92,7 @@ jobs:
             echo "!! magisk.versionCode not found in app/gradle.properties" >&2
             exit 1
           fi
-          VER=$(python3 -c "import sys; print(f'{int(sys.argv[1]) / 1000:g}')" "$CODE")
+          VER=$(python3 scripts/version.py "$CODE")
           NAME="${VER}-zhiyu(${CODE})"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "== naming artifacts: $NAME"
