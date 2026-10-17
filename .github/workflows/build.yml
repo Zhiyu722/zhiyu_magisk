@@ -8,6 +8,9 @@ on:
       - "native/**"
       - "build.py"
       - ".github/workflows/build.yml"
+      # The setup action installs the toolchain (sccache included); a change there can break
+      # every build, so it has to run the workflow too.
+      - ".github/actions/**"
   pull_request:
     branches: [master]
   workflow_dispatch:
