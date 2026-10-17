@@ -13,8 +13,25 @@ android {
     namespace = "com.zhiyu.magisk"
     enableKotlin = false
 
-    val base = "https://github.com/topjohnwu/Magisk/releases/download/"
-    val url = base + "v${Config.version}/Magisk-v${Config.version}.apk"
+    // Where the stub downloads the full manager app from once the user taps "install".
+    //
+    // This used to point at topjohnwu/Magisk, the upstream project. That is the wrong app for this
+    // fork: it is a different package (com.topjohnwu.magisk), signed with a different key, so the
+    // stub would have installed an unrelated manager instead of upgrading itself.
+    //
+    // The file name has to match what the release workflow publishes. That workflow names the APK
+    // Magisk-<short version>-zhiyu(<versionCode>).apk, deriving the short version from the
+    // versionCode (31000 -> 31); GitHub then rewrites the parentheses to dots as it uploads, so the
+    // asset that actually resolves is Magisk-31-zhiyu.31000.apk.
+    val versionCodeValue = Config.versionCode
+    val minor = versionCodeValue % 1000
+    val shortVersion = if (minor == 0) {
+        "${versionCodeValue / 1000}"
+    } else {
+        "${versionCodeValue / 1000}." + minor.toString().padStart(3, '0').trimEnd('0')
+    }
+    val url = "https://github.com/Zhiyu722/zhiyu_magisk/releases/download/" +
+        "v${Config.version}/Magisk-$shortVersion-zhiyu.$versionCodeValue.apk"
 
     defaultConfig {
         applicationId = "com.zhiyu.magisk"
