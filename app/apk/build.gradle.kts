@@ -39,6 +39,8 @@ dependencies {
 
     // Compose
     implementation(libs.compose.ui)
+    implementation(libs.compose.animation)
+    implementation(libs.compose.foundation)
     implementation(libs.accompanist.drawablepainter)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
@@ -47,14 +49,16 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material3.adaptive.navigation.suite)
+    implementation(libs.window.core)
     implementation(libs.material)
+
+    // Liquid glass (Kyant0/AndroidLiquidGlass)
+    implementation(libs.kyant.backdrop)
 
     // Navigation3
     implementation(libs.navigation3.runtime)
     implementation(libs.navigationevent.compose)
     implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(libs.navigation3.ui)
-
-    // Liquid glass effect engine (Kyant0/AndroidLiquidGlass)
-    implementation(libs.kyant.backdrop)
 }

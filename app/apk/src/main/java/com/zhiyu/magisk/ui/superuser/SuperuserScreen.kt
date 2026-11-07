@@ -1,56 +1,47 @@
 package com.zhiyu.magisk.ui.superuser
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Badge
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import androidx.lifecycle.compose.dropUnlessResumed
+import com.zhiyu.magisk.ui.component.onlyHorizontal
+import com.zhiyu.magisk.ui.component.rememberBiometricAuth
 import com.zhiyu.magisk.ui.component.verticalScrollbar
-import com.zhiyu.magisk.ui.glass.GlassCard
-import com.zhiyu.magisk.ui.glass.GlassDefaults
-import com.zhiyu.magisk.ui.glass.GlassScreen
-import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.ui.navigation.LocalNavigator
 import com.zhiyu.magisk.ui.navigation.Route
 import com.zhiyu.magisk.core.R as CoreR
@@ -59,21 +50,48 @@ import com.zhiyu.magisk.core.R as CoreR
 @Composable
 fun SuperuserScreen(
     viewModel: SuperuserViewModel,
-    modifier: Modifier = Modifier
+    isFabAtBottom: Boolean,
+    modifier: Modifier = Modifier,
+    onRegisterFab: (((() -> Unit)?) -> Unit)? = null,
+    contentFocusRequester: FocusRequester? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val navigator = LocalNavigator.current
-    val layoutDirection = LocalLayoutDirection.current
+    val requireAuth = rememberBiometricAuth()
+    // Drop taps while a screen transition runs, so a quick second tap can't open another screen
+    val openGrant = dropUnlessResumed { navigator.push(Route.SuperuserGrant) }
 
-    GlassScreen(
+    DisposableEffect(onRegisterFab) {
+        onRegisterFab?.invoke(openGrant)
+        onDispose {
+            onRegisterFab?.invoke(null)
+        }
+    }
+
+    Scaffold(
         modifier = modifier,
         topBar = {
-            GlassTopAppBar(
+            TopAppBar(
                 title = { Text(stringResource(CoreR.string.superuser)) },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 scrollBehavior = scrollBehavior
             )
+        },
+        floatingActionButton = {
+            if (onRegisterFab == null) {
+                FloatingActionButton(
+                    onClick = openGrant,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    content = {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(CoreR.string.superuser_grant),
+                            modifier = Modifier.size(28.dp),
+                        )
+                    },
+                )
+            }
         }
     ) { padding ->
         if (uiState.loading) {
@@ -85,7 +103,7 @@ fun SuperuserScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@GlassScreen
+            return@Scaffold
         }
 
         if (uiState.policies.isEmpty()) {
@@ -114,43 +132,56 @@ fun SuperuserScreen(
                     )
                 }
             }
-            return@GlassScreen
+            return@Scaffold
         }
 
-        val listState = rememberLazyListState()
-        LazyColumn(
-            state = listState,
+        val listBottomPadding = padding.calculateBottomPadding() + if (isFabAtBottom) 92.dp else 12.dp
+        val scrollbarBottomPadding = padding.calculateBottomPadding() + if (isFabAtBottom) 80.dp else 12.dp
+
+        val gridState = rememberLazyGridState()
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(320.dp),
+            state = gridState,
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .consumeWindowInsets(padding)
+                .padding(padding.onlyHorizontal())
                 .verticalScrollbar(
-                    listState,
+                    gridState,
                     contentPadding = PaddingValues(
                         top = padding.calculateTopPadding() + 4.dp,
-                        bottom = padding.calculateBottomPadding() + 104.dp
-                    )
+                        bottom = scrollbarBottomPadding,
+                    ),
                 ),
             contentPadding = PaddingValues(
-                start = padding.calculateStartPadding(layoutDirection) + 12.dp,
-                top = padding.calculateTopPadding() + 4.dp,
-                end = padding.calculateEndPadding(layoutDirection) + 12.dp,
-                bottom = padding.calculateBottomPadding() + 104.dp
+                start = 12.dp,
+                top = padding.calculateTopPadding() + 16.dp,
+                end = 12.dp,
+                bottom = listBottomPadding,
             ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { Spacer(Modifier.height(4.dp)) }
             items(
                 items = uiState.policies,
-                key = { "${it.policy.uid}_${it.packageName}" },
+                key = { "${it.uid}_${it.packageName}" },
                 contentType = { "PolicyCard" }
             ) { item ->
+                val isLast = item == uiState.policies.lastOrNull()
                 PolicyCard(
                     item = item,
-                    onToggle = { viewModel.togglePolicy(item) },
-                    onDetail = { navigator.push(Route.SuperuserDetail(item.policy.uid)) },
+                    onToggle = {
+                        requireAuth {
+                            viewModel.togglePolicy(item)
+                        }
+                    },
+                    onDetail = dropUnlessResumed { navigator.push(Route.SuperuserDetail(item.uid)) },
+                    modifier = if (isLast && contentFocusRequester != null) {
+                        Modifier.focusRequester(contentFocusRequester)
+                    } else Modifier,
                 )
             }
-            item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
@@ -162,65 +193,18 @@ private fun PolicyCard(
     onDetail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    GlassCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .alpha(if (item.isEnabled) 1f else 0.5f)
-            .clip(GlassDefaults.cardShape)
-            .clickable(onClick = onDetail),
-        contentPadding = PaddingValues(0.dp)
-    ) {
-        ListItem(
-            leadingContent = {
-                Image(
-                    painter = rememberDrawablePainter(item.icon),
-                    contentDescription = item.appName,
-                    modifier = Modifier.size(40.dp)
-                )
-            },
-            headlineContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (item.isSharedUid) {
-                        Spacer(Modifier.width(6.dp))
-                        SharedUidBadge()
-                    }
-                }
-            },
-            supportingContent = {
-                Text(
-                    text = item.packageName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            trailingContent = {
-                Switch(
-                    checked = item.isEnabled,
-                    onCheckedChange = { onToggle() }
-                )
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-        )
-    }
-}
-
-@Composable
-internal fun SharedUidBadge(modifier: Modifier = Modifier) {
-    Badge(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Text(
-            text = stringResource(CoreR.string.shared_uid),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-    }
+    SuperuserAppCard(
+        packageName = item.packageName,
+        title = item.title,
+        isSharedUid = item.isSharedUid,
+        onClick = onDetail,
+        contentDescription = item.appName,
+        modifier = modifier.alpha(if (item.isEnabled) 1f else 0.5f),
+        trailingContent = {
+            Switch(
+                checked = item.isEnabled,
+                onCheckedChange = { onToggle() }
+            )
+        }
+    )
 }

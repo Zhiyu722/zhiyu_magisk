@@ -249,7 +249,7 @@ test_main() {
   local images=()
   for apk in "${apks[@]}"; do
     images+=("magisk-$(basename $apk .apk).img")
-    ./build.py -v avd_patch --apk "$apk" "$ramdisk" "${images[-1]}"
+    ./build.py -v patch --avd --apk "$apk" "$ramdisk" "${images[-1]}"
   done
 
   adb emu kill
@@ -298,7 +298,6 @@ live_test_main() {
   for apk in "${apks[@]}"; do
     # Cleanup
     adb shell pm uninstall com.zhiyu.magisk || true
-    adb shell pm uninstall repackaged.com.zhiyu.magisk.test || true
     adb shell /system/xbin/su 0 rm -rf /data/adb/modules
 
     # "Install" Magisk
@@ -315,6 +314,20 @@ live_test_main() {
   done
 }
 
+app_test_main() {
+  local apks=($(print_apks "$@"))
+  local pkg='com.zhiyu.magisk.test'
+  local app="$pkg/$pkg.AppTestRunner"
+  for apk in "${apks[@]}"; do
+    # Cleanup
+    adb shell pm uninstall com.zhiyu.magisk || true
+    adb install --user current -r -g $apk
+    adb install --user current -r -g out/test.apk
+    am_instrument '.AppTest' $app
+  done
+}
+
+
 case "$1" in
   test )
     shift
@@ -326,6 +339,11 @@ case "$1" in
     shift
     set -x
     live_test_main "$@"
+    ;;
+  app-test )
+    shift
+    set -x
+    app_test_main "$@"
     ;;
   run )
     shift

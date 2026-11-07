@@ -5,13 +5,11 @@ import android.os.Build
 import androidx.annotation.Keep
 import androidx.core.net.toUri
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.zhiyu.magisk.core.BuildConfig.APP_PACKAGE_NAME
 import com.zhiyu.magisk.core.Const
 import com.zhiyu.magisk.core.download.DownloadNotifier
 import com.zhiyu.magisk.core.download.DownloadProcessor
 import com.zhiyu.magisk.core.ktx.cachedFile
 import com.zhiyu.magisk.core.model.module.LocalModule
-import com.zhiyu.magisk.core.tasks.AppMigration
 import com.zhiyu.magisk.core.tasks.FlashZip
 import com.zhiyu.magisk.core.tasks.MagiskInstaller
 import com.zhiyu.magisk.core.utils.RootUtils
@@ -33,14 +31,14 @@ import java.io.PrintStream
 
 @Keep
 @RunWith(AndroidJUnit4::class)
-class Environment : BaseTest {
+class Environment : TestCommon {
 
     companion object {
         @BeforeClass
         @JvmStatic
-        fun before() = BaseTest.prerequisite()
+        fun before() = TestCommon.prerequisite()
 
-        // Whether we're running with live setup (patches through live_setup.sh)
+        // Whether we're running with live setup (patches through avd_setup.sh)
         fun isLiveSetup(): Boolean {
             val liveMarker = ShellUtils.fastCmd("echo \$MAGISKTMP/.magisk/live")
             return RootUtils.fs.getFile(liveMarker).exists()
@@ -268,29 +266,5 @@ class Environment : BaseTest {
         setupInvalidZygiskModule(update)
         setupRemoveModule(root)
         setupUpgradeModule(root, update)
-    }
-
-    @Test
-    fun setupAppHide() {
-        runBlocking {
-            assertTrue(
-                "App hiding failed",
-                AppMigration.patchAndHide(
-                    context = appContext,
-                    label = "Settings",
-                    pkg = "repackaged.$APP_PACKAGE_NAME"
-                )
-            )
-        }
-    }
-
-    @Test
-    fun setupAppRestore() {
-        runBlocking {
-            assertTrue(
-                "App restoration failed",
-                AppMigration.restoreApp(appContext)
-            )
-        }
     }
 }

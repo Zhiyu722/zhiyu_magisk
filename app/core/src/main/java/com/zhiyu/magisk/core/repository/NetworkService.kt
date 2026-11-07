@@ -7,10 +7,12 @@ import com.zhiyu.magisk.core.Config.Value.CUSTOM_CHANNEL
 import com.zhiyu.magisk.core.Config.Value.DEBUG_CHANNEL
 import com.zhiyu.magisk.core.Config.Value.DEFAULT_CHANNEL
 import com.zhiyu.magisk.core.Config.Value.STABLE_CHANNEL
+import com.zhiyu.magisk.core.Const
 import com.zhiyu.magisk.core.Info
 import com.zhiyu.magisk.core.data.GithubApiServices
 import com.zhiyu.magisk.core.data.RawUrl
 import com.zhiyu.magisk.core.ktx.dateFormat
+import com.zhiyu.magisk.core.model.GooglebookRecoveryJson
 import com.zhiyu.magisk.core.model.Release
 import com.zhiyu.magisk.core.model.ReleaseAssets
 import com.zhiyu.magisk.core.model.UpdateInfo
@@ -43,6 +45,14 @@ class NetworkService(
 
     suspend fun fetchUpdate(version: Int) = safe {
         findRelease { it.versionCode == version }.asInfo()
+    }
+
+    suspend fun fetchGooglebookRecovery() = safe {
+        raw.fetchGooglebookRecoveryJson(Const.Url.GOOGLEBOOK_RECOVERY_URL)
+    }
+
+    suspend fun fetchPixelFactoryImages() = safe {
+        raw.fetchPixelFactoryImages(Const.Url.PIXEL_FACTORY_IMAGES_URL)
     }
 
     // Keep going through all release pages until we find a match

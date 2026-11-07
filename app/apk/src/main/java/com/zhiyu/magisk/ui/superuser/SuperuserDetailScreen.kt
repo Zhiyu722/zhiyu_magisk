@@ -13,24 +13,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,14 +46,15 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import com.zhiyu.magisk.core.Config
+import com.zhiyu.magisk.ui.component.AppIcon
 import com.zhiyu.magisk.ui.component.ConfirmResult
 import com.zhiyu.magisk.ui.component.SettingsSwitch
+import com.zhiyu.magisk.ui.component.rememberBiometricAuth
 import com.zhiyu.magisk.ui.component.rememberConfirmDialog
 import com.zhiyu.magisk.ui.component.verticalScrollbar
-import com.zhiyu.magisk.ui.glass.GlassCard
-import com.zhiyu.magisk.ui.glass.GlassScreen
-import com.zhiyu.magisk.ui.glass.GlassTopAppBar
+import com.zhiyu.magisk.ui.navigation.LocalNavigator
+import com.zhiyu.magisk.ui.navigation.Route
 import kotlinx.coroutines.launch
 import com.zhiyu.magisk.core.R as CoreR
 
@@ -56,14 +65,28 @@ fun SuperuserDetailScreen(
     viewModel: SuperuserViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onAuthenticate: ((onSuccess: () -> Unit) -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val items = uiState.policies.filter { it.policy.uid == uid }
+    // After a revoke, the policy is removed from the state while this screen is still
+    // animating out, so keep showing the last known content instead of a blank page.
+    val lastItems = remember(uid) { LastItems() }
+    val currentItems = uiState.policies.filter { it.uid == uid }
+    val items = currentItems
+        .also { if (it.isNotEmpty()) lastItems.value = it }
+        .ifEmpty { lastItems.value }
     val item = items.firstOrNull()
+
+    // If the policy disappears while this screen is still shown (e.g. the app was uninstalled),
+    // leave instead of showing stale content. After a revoke, we have already navigated away.
+    val navigator = LocalNavigator.current
+    val isGone = !uiState.loading && currentItems.isEmpty()
+    LaunchedEffect(isGone) {
+        if (isGone && navigator.current() == Route.SuperuserDetail(uid)) onBack()
+    }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+    val requireAuth = rememberBiometricAuth()
     val revokeDialog = rememberConfirmDialog()
     val revokeTitle = stringResource(CoreR.string.su_revoke_title)
     val revokeMsg = item?.let { stringResource(CoreR.string.su_revoke_msg, it.appName) } ?: ""
@@ -74,18 +97,12 @@ fun SuperuserDetailScreen(
             viewModel.startLoading()
         }
     }
-    LaunchedEffect(onAuthenticate) {
-        if (onAuthenticate != null) {
-            viewModel.authenticate = onAuthenticate
-        }
-    }
 
-    GlassScreen(
+    Scaffold(
         modifier = modifier,
         topBar = {
-            GlassTopAppBar(
+            TopAppBar(
                 title = { Text(stringResource(CoreR.string.settings)) },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 navigationIcon = {
                     IconButton(
                         onClick = onBack
@@ -109,10 +126,10 @@ fun SuperuserDetailScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@GlassScreen
+            return@Scaffold
         }
 
-        if (item == null) return@GlassScreen
+        if (item == null) return@Scaffold
 
         Column(
             modifier = Modifier
@@ -121,19 +138,22 @@ fun SuperuserDetailScreen(
                 .padding(padding)
                 .verticalScrollbar(scrollState, contentPadding = PaddingValues(vertical = 12.dp))
                 .verticalScroll(scrollState)
+                .wrapContentWidth(Alignment.CenterHorizontally)
+                .widthIn(max = 720.dp)
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            GlassCard(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(0.dp)
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Row(
                     modifier = Modifier.padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Image(
-                        painter = rememberDrawablePainter(item.icon),
+                    AppIcon(
+                        packageName = item.packageName,
                         contentDescription = item.appName,
                         modifier = Modifier.size(48.dp)
                     )
@@ -157,7 +177,7 @@ fun SuperuserDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "UID: ${item.policy.uid}",
+                            text = "UID: ${item.uid}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -165,37 +185,40 @@ fun SuperuserDetailScreen(
                 }
             }
 
-            GlassCard(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    if (uiState.suRestrict || item.isRestricted) {
-                        SettingsSwitch(
-                            title = stringResource(CoreR.string.settings_su_restrict_title),
-                            checked = item.isRestricted,
-                            onCheckedChange = { viewModel.toggleRestrict(item) }
-                        )
-                        SettingsDivider()
-                    }
+                if (uiState.suRestrict || item.isRestricted) {
                     SettingsSwitch(
-                        title = stringResource(CoreR.string.superuser_toggle_notification),
-                        checked = item.notification,
-                        onCheckedChange = { viewModel.updateNotify(item) }
+                        title = stringResource(CoreR.string.settings_su_restrict_title),
+                        checked = item.isRestricted,
+                        onCheckedChange = {
+                            requireAuth {
+                                viewModel.toggleRestrict(item)
+                            }
+                        }
                     )
-                    SettingsDivider()
-                    SettingsSwitch(
-                        title = stringResource(CoreR.string.logs),
-                        checked = item.logging,
-                        onCheckedChange = { viewModel.updateLogging(item) }
-                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
+                SettingsSwitch(
+                    title = stringResource(CoreR.string.superuser_toggle_notification),
+                    checked = item.notification,
+                    onCheckedChange = { viewModel.updateNotify(item) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsSwitch(
+                    title = stringResource(CoreR.string.logs),
+                    checked = item.logging,
+                    onCheckedChange = { viewModel.updateLogging(item) }
+                )
             }
 
             RevokeButton(
                 onClick = {
-                    if (viewModel.requiresAuth) {
-                        viewModel.authenticate { viewModel.performDelete(item, onBack) }
+                    if (Config.suAuth) {
+                        requireAuth { viewModel.performDelete(item, onBack) }
                     } else {
                         scope.launch {
                             val result = revokeDialog.awaitConfirm(
@@ -221,7 +244,7 @@ private fun RevokeButton(
     Button(
         onClick = onClick,
         colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+            containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer
         ),
         shape = ButtonDefaults.shape,
@@ -241,12 +264,7 @@ private fun RevokeButton(
     }
 }
 
-/** Hairline separator between the rows of one settings glass card. */
-@Composable
-private fun SettingsDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-    )
+// Plain holder: updating it must not trigger recomposition
+private class LastItems {
+    var value: List<PolicyItem> = emptyList()
 }

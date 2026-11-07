@@ -8,15 +8,10 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.res.Configuration
 import android.content.res.Resources
-import com.zhiyu.magisk.StubApk
 import com.zhiyu.magisk.core.ktx.unwrap
 import com.zhiyu.magisk.core.utils.LocaleSetting
 
-fun Resources.addAssetPath(path: String) = StubApk.addAssetPath(this, path)
-
 fun Resources.patch(): Resources {
-    if (isRunningAsStub)
-        addAssetPath(AppApkPath)
     LocaleSetting.instance.updateResource(this)
     return this
 }
@@ -36,8 +31,7 @@ fun Context.wrap(): Context {
     }
 }
 
-fun Class<*>.cmp(pkg: String) =
-    ComponentName(pkg, Info.stub?.classToComponent?.get(name) ?: name)
+fun Class<*>.cmp(pkg: String) = ComponentName(pkg, name)
 
 inline fun <reified T> Context.intent() = Intent().setComponent(T::class.java.cmp(packageName))
 
@@ -51,5 +45,4 @@ val shouldKeepResources = listOf(
     R.string.app_changelog,
     R.string.home_item_source,
     R.drawable.ic_more,
-    R.array.allow_timeout,
 )

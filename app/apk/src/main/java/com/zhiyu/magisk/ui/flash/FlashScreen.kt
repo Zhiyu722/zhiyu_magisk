@@ -7,19 +7,22 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import com.zhiyu.magisk.R
+import com.zhiyu.magisk.ui.component.rememberConfirmDialog
 import com.zhiyu.magisk.ui.component.rememberExternalStoragePermissionLauncher
-import com.zhiyu.magisk.ui.glass.GlassScreen
-import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.ui.terminal.TerminalScreen
 import com.zhiyu.magisk.core.R as CoreR
 
@@ -37,6 +40,26 @@ fun FlashScreen(
         viewModel.saveLog()
     }
 
+    val exitConfirmDialog = rememberConfirmDialog(onConfirm = onBack)
+    val exitTitle = stringResource(CoreR.string.running_exit_title)
+    val exitMessage = stringResource(CoreR.string.running_exit_msg)
+
+    val backState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+    NavigationBackHandler(
+        state = backState,
+        isBackEnabled = !finished,
+        onBackCompleted = {
+            if (!finished) {
+                exitConfirmDialog.showConfirm(
+                    title = exitTitle,
+                    content = exitMessage,
+                )
+            } else {
+                onBack()
+            }
+        }
+    )
+
     val statusText = when (flashState) {
         FlashViewModel.State.FLASHING -> stringResource(CoreR.string.flashing)
         FlashViewModel.State.SUCCESS -> stringResource(CoreR.string.done)
@@ -44,19 +67,27 @@ fun FlashScreen(
     }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    GlassScreen(
+    Scaffold(
         modifier = modifier,
         topBar = {
-            GlassTopAppBar(
+            TopAppBar(
                 title = { Text("${stringResource(CoreR.string.flash_screen_title)} - $statusText") },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 navigationIcon = {
                     IconButton(
-                        onClick = onBack
+                        onClick = {
+                            if (!finished) {
+                                exitConfirmDialog.showConfirm(
+                                    title = exitTitle,
+                                    content = exitMessage,
+                                )
+                            } else {
+                                onBack()
+                            }
+                        }
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null,
+                            contentDescription = stringResource(CoreR.string.back),
                         )
                     }
                 },
@@ -87,10 +118,11 @@ fun FlashScreen(
         }
     ) { padding ->
         TerminalScreen(
+            emulator = viewModel.emulator,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            onEmulatorCreated = { viewModel.onEmulatorCreated(it) },
+            onResized = viewModel::onTerminalResized,
         )
     }
 }

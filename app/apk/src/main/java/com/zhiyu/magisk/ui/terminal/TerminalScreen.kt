@@ -9,13 +9,17 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -25,38 +29,49 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.withTranslation
-import com.zhiyu.magisk.terminal.TerminalColorScheme
-import com.zhiyu.magisk.terminal.TerminalColors
 import com.zhiyu.magisk.terminal.TerminalEmulator
 import com.zhiyu.magisk.ui.component.terminalHorizontalScrollbar
 import com.zhiyu.magisk.ui.component.terminalScrollbar
-import com.zhiyu.magisk.ui.glass.LocalGlassDarkTheme
 import kotlin.math.max
 
 private const val MIN_TERMINAL_COLUMNS = 256
 
 @Composable
 fun TerminalScreen(
+    emulator: TerminalEmulator,
     modifier: Modifier = Modifier,
-    onEmulatorCreated: (TerminalEmulator) -> Unit = {},
+    onResized: () -> Unit = {},
 ) {
+    val currentOnResized by rememberUpdatedState(onResized)
     val density = LocalDensity.current
-    val dark = LocalGlassDarkTheme.current
-    // The console paints itself, so its backdrop must be the same colour the palette calls the
-    // default background — otherwise cells would not blend into the area around them.
-    val consoleBackground = Color(
-        if (dark) TerminalColorScheme.DARK_BACKGROUND else TerminalColorScheme.LIGHT_BACKGROUND
-    )
     val renderer = remember {
         val textSizePx = with(density) { 12.sp.toPx().toInt() }
         TerminalRenderer(textSizePx, Typeface.MONOSPACE)
     }
 
-    var emulator by remember { mutableStateOf<TerminalEmulator?>(null) }
-    var updateTick by remember { mutableIntStateOf(0) }
+    var drawTrigger by remember { mutableLongStateOf(0L) }
     var topRow by remember { mutableIntStateOf(0) }
     var scrollX by remember { mutableFloatStateOf(0f) }
     var scrolledToBottom by remember { mutableStateOf(true) }
+    // Snapshot copies of emulator fields so scrollbars observe output changes
+    var transcriptRows by remember { mutableIntStateOf(0) }
+    var maxUsedColumn by remember { mutableIntStateOf(0) }
+
+    // Re-read emulator state after new output or a resize, and redraw
+    fun refresh() {
+        transcriptRows = emulator.screen.activeTranscriptRows
+        maxUsedColumn = emulator.maxUsedColumn
+        topRow = if (scrolledToBottom) 0 else topRow.coerceAtLeast(-transcriptRows)
+        drawTrigger++
+    }
+
+    DisposableEffect(emulator) {
+        refresh()
+        emulator.onScreenUpdate = { refresh() }
+        onDispose {
+            emulator.onScreenUpdate = null
+        }
+    }
 
     BoxWithConstraints(modifier = modifier) {
         val widthPx = constraints.maxWidth.toFloat()
@@ -66,38 +81,28 @@ fun TerminalScreen(
         val rows = max(4, ((heightPx - renderer.fontLineSpacingAndAscent) / renderer.fontLineSpacing).toInt())
         val lineHeight = renderer.fontLineSpacing.toFloat()
 
-        @Suppress("UNUSED_EXPRESSION")
-        updateTick
-        val maxUsedCol = emulator?.maxUsedColumn ?: 0
-        val contentWidthPx = maxOf(widthPx, (maxUsedCol + 2) * renderer.fontWidth)
-        val maxScrollX = maxOf(0f, contentWidthPx - widthPx)
+        fun getMaxScrollX(): Float {
+            val contentWidthPx = maxOf(widthPx, (maxUsedColumn + 2) * renderer.fontWidth)
+            return maxOf(0f, contentWidthPx - widthPx)
+        }
 
-        LaunchedEffect(cols, rows, dark) {
-            // Repaint the palette before the emulator copies it, and again when the theme flips.
-            TerminalColors.COLOR_SCHEME.applyAppTheme(dark)
-            val emu = emulator
-            if (emu == null) {
-                val newEmu = TerminalEmulator(cols, rows, renderer.fontWidth.toInt(), renderer.fontLineSpacing, null)
-                newEmu.onScreenUpdate = {
-                    if (scrolledToBottom) topRow = 0
-                    updateTick++
-                }
-                emulator = newEmu
-                onEmulatorCreated(newEmu)
-            } else {
-                emu.resize(cols, rows, renderer.fontWidth.toInt(), renderer.fontLineSpacing)
-                emu.mColors.reset()
+        LaunchedEffect(cols, rows) {
+            emulator.resize(cols, rows, renderer.fontWidth.toInt(), renderer.fontLineSpacing)
+            // The emulator outlives this screen (e.g. across rotation), and the first frame was drawn
+            // before this resize, so redraw with the new geometry.
+            refresh()
+            currentOnResized()
+        }
+
+        // Keep scrollX in range when the viewport or content width changes
+        LaunchedEffect(widthPx) {
+            snapshotFlow { getMaxScrollX() }.collect { maxScrollX ->
+                scrollX = scrollX.coerceIn(0f, maxScrollX)
             }
         }
 
-        LaunchedEffect(maxScrollX) {
-            scrollX = scrollX.coerceIn(0f, maxScrollX)
-        }
-
-        val activeTranscriptRows = emulator?.screen?.activeTranscriptRows ?: 0
         val verticalScrollableState = rememberScrollableState { delta ->
-            val emu = emulator ?: return@rememberScrollableState 0f
-            val minTop = -emu.screen.activeTranscriptRows
+            val minTop = -emulator.screen.activeTranscriptRows
             val rowDelta = -(delta / lineHeight).toInt()
             if (rowDelta != 0) {
                 val newTopRow = (topRow + rowDelta).coerceIn(minTop, 0)
@@ -108,6 +113,7 @@ fun TerminalScreen(
         }
 
         val horizontalScrollableState = rememberScrollableState { delta ->
+            val maxScrollX = getMaxScrollX()
             val oldScrollX = scrollX
             val newScrollX = (scrollX - delta).coerceIn(0f, maxScrollX)
             scrollX = newScrollX
@@ -118,10 +124,10 @@ fun TerminalScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .clipToBounds()
-                .background(consoleBackground)
+                .background(Color.Black)
                 .terminalScrollbar(
-                    activeTranscriptRows = activeTranscriptRows,
-                    topRow = topRow,
+                    activeTranscriptRowsProvider = { transcriptRows },
+                    topRowProvider = { topRow },
                     visibleRows = rows,
                     onScrollToRow = { newRow ->
                         topRow = newRow
@@ -130,8 +136,8 @@ fun TerminalScreen(
                     isScrollInProgress = verticalScrollableState.isScrollInProgress,
                 )
                 .terminalHorizontalScrollbar(
-                    scrollX = scrollX,
-                    maxScrollX = maxScrollX,
+                    scrollXProvider = { scrollX },
+                    maxScrollXProvider = { getMaxScrollX() },
                     viewportWidth = widthPx,
                     onScrollToX = { newScrollX -> scrollX = newScrollX },
                     isScrollInProgress = horizontalScrollableState.isScrollInProgress,
@@ -145,12 +151,11 @@ fun TerminalScreen(
                     state = horizontalScrollableState
                 )
                 .drawBehind {
-                    @Suppress("UNUSED_EXPRESSION")
-                    updateTick
-                    val emu = emulator ?: return@drawBehind
-                    drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.withTranslation(-scrollX, 0f) {
-                            renderer.render(emu, this, topRow, -1, -1, -1, -1)
+                    if (drawTrigger >= 0L) {
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.withTranslation(-scrollX, 0f) {
+                                renderer.render(emulator, this, topRow, -1, -1, -1, -1)
+                            }
                         }
                     }
                 }

@@ -6,8 +6,8 @@ out
 *.log
 
 # Local configs
-/config.prop
 /release.prop
+/config.prop
 /notes.md
 
 # Android Studio

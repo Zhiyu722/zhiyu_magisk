@@ -9,5 +9,4 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>
-    <style name="StubSplashTheme" parent="SplashTheme"/>
 </resources>

@@ -1,21 +1,16 @@
 package com.zhiyu.magisk.core.download
 
 import android.net.Uri
-import com.zhiyu.magisk.StubApk
-import com.zhiyu.magisk.core.R
-import com.zhiyu.magisk.core.isRunningAsStub
 import com.zhiyu.magisk.core.ktx.cachedFile
 import com.zhiyu.magisk.core.ktx.copyAll
 import com.zhiyu.magisk.core.ktx.copyAndClose
 import com.zhiyu.magisk.core.ktx.withInOut
 import com.zhiyu.magisk.core.ktx.writeTo
-import com.zhiyu.magisk.core.tasks.AppMigration
 import com.zhiyu.magisk.core.utils.MediaStoreUtils.outputStream
 import com.zhiyu.magisk.utils.APKInstall
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -31,41 +26,9 @@ class DownloadProcessor(notifier: DownloadNotifier) : DownloadNotifier by notifi
 
     suspend fun handleApp(stream: InputStream, subject: Subject.App) {
         val external = subject.file.outputStream()
-
-        if (isRunningAsStub) {
-            val updateApk = StubApk.update(context)
-            try {
-                // Download full APK to stub update path
-                stream.copyAndClose(TeeOutputStream(external, updateApk.outputStream()))
-
-                // Also upgrade stub
-                notifyUpdate(subject.notifyId) {
-                    it.setProgress(0, 0, true)
-                        .setContentTitle(context.getString(R.string.hide_app_title))
-                        .setContentText("")
-                }
-
-                // Extract stub
-                val apk = context.cachedFile("stub.apk")
-                ZipFile.Builder().setFile(updateApk).get().use { zf ->
-                    apk.delete()
-                    zf.getInputStream(zf.getEntry("assets/stub.apk")).writeTo(apk)
-                }
-
-                // Patch and install
-                subject.intent = AppMigration.upgradeStub(context, apk)
-                    ?: throw IOException("HideAPK patch error")
-                apk.delete()
-            } catch (e: Exception) {
-                // If any error occurred, do not let stub load the new APK
-                updateApk.delete()
-                throw e
-            }
-        } else {
-            val session = APKInstall.startSession(context)
-            stream.copyAndClose(TeeOutputStream(external, session.openStream(context)))
-            subject.intent = session.waitIntent()
-        }
+        val session = APKInstall.startSession(context)
+        stream.copyAndClose(TeeOutputStream(external, session.openStream(context)))
+        subject.intent = session.waitIntent()
     }
 
     suspend fun handleModule(src: InputStream, file: Uri) {

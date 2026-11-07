@@ -3,9 +3,7 @@ package com.zhiyu.magisk.core.base
 import android.Manifest.permission.POST_NOTIFICATIONS
 import android.Manifest.permission.REQUEST_INSTALL_PACKAGES
 import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-import android.app.Activity
 import android.content.ActivityNotFoundException
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -16,7 +14,6 @@ import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import com.zhiyu.magisk.core.R
-import com.zhiyu.magisk.core.ktx.reflectField
 import com.zhiyu.magisk.core.ktx.toast
 import com.zhiyu.magisk.core.utils.RequestAuthentication
 import com.zhiyu.magisk.core.utils.RequestInstall
@@ -125,17 +122,4 @@ class ActivityExtension(private val activity: ComponentActivity) {
     companion object {
         private const val CONTENT_CALLBACK_KEY = "content_callback"
     }
-}
-
-val Activity.launchPackage: String? get() {
-    return if (Build.VERSION.SDK_INT >= 34) {
-        launchedFromPackage
-    } else {
-        Activity::class.java.reflectField("mReferrer").get(this) as String?
-    }
-}
-
-fun Activity.relaunch() {
-    startActivity(Intent(intent).setFlags(0))
-    finish()
 }

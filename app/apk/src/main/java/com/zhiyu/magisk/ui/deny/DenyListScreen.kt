@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -41,10 +45,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
@@ -52,6 +58,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,11 +72,9 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import com.zhiyu.magisk.ui.component.AppIcon
+import com.zhiyu.magisk.ui.component.AppSortFilterActions
 import com.zhiyu.magisk.ui.component.verticalScrollbar
-import com.zhiyu.magisk.ui.glass.GlassCard
-import com.zhiyu.magisk.ui.glass.GlassScreen
-import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.core.R as CoreR
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,110 +92,48 @@ fun DenyListScreen(
     val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
     val sortReverse by viewModel.sortReverse.collectAsStateWithLifecycle()
 
-    var showSortMenu by remember { mutableStateOf(false) }
-    var showFilterMenu by remember { mutableStateOf(false) }
+    val searchBackState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+    NavigationBackHandler(
+        state = searchBackState,
+        isBackEnabled = query.isNotEmpty(),
+        onBackCompleted = {
+            viewModel.setQuery("")
+        }
+    )
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    GlassScreen(
+    Scaffold(
         modifier = modifier,
         topBar = {
-            GlassTopAppBar(
+            TopAppBar(
                 title = { Text(stringResource(CoreR.string.denylist)) },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 navigationIcon = {
                     IconButton(
-                        onClick = onBack
+                        onClick = {
+                            if (query.isNotEmpty()) {
+                                viewModel.setQuery("")
+                            } else {
+                                onBack()
+                            }
+                        }
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null,
+                            contentDescription = stringResource(CoreR.string.back),
                         )
                     }
                 },
                 actions = {
-                    Box {
-                        IconButton(
-                            onClick = { showSortMenu = true },
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Sort,
-                                contentDescription = stringResource(CoreR.string.menu_sort),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false }
-                        ) {
-                            val sortOptions = listOf(
-                                CoreR.string.sort_by_name to SortBy.NAME,
-                                CoreR.string.sort_by_package_name to SortBy.PACKAGE_NAME,
-                                CoreR.string.sort_by_install_time to SortBy.INSTALL_TIME,
-                                CoreR.string.sort_by_update_time to SortBy.UPDATE_TIME,
-                            )
-                            sortOptions.forEach { (resId, sort) ->
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(resId)) },
-                                    trailingIcon = if (sortBy == sort) {
-                                        { Icon(Icons.Default.Check, contentDescription = null) }
-                                    } else null,
-                                    onClick = {
-                                        viewModel.setSortBy(sort)
-                                        showSortMenu = false
-                                    }
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text(stringResource(CoreR.string.sort_reverse)) },
-                                trailingIcon = if (sortReverse) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null,
-                                onClick = {
-                                    viewModel.toggleSortReverse()
-                                    showSortMenu = false
-                                }
-                            )
-                        }
-                    }
-
-                    Box {
-                        IconButton(
-                            onClick = { showFilterMenu = true },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = stringResource(CoreR.string.hide_filter_hint),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showFilterMenu,
-                            onDismissRequest = { showFilterMenu = false },
-                            offset = DpOffset(x = (-8).dp, y = 0.dp),
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(CoreR.string.show_system_app)) },
-                                trailingIcon = if (showSystem) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null,
-                                onClick = {
-                                    viewModel.setShowSystem(!showSystem)
-                                    showFilterMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(CoreR.string.show_os_app)) },
-                                trailingIcon = if (showOS) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null,
-                                onClick = {
-                                    if (!showOS && !showSystem) {
-                                        viewModel.setShowSystem(true)
-                                    }
-                                    viewModel.setShowOS(!showOS)
-                                    showFilterMenu = false
-                                }
-                            )
-                        }
-                    }
+                    AppSortFilterActions(
+                        sortBy = sortBy,
+                        sortReverse = sortReverse,
+                        onSortByChanged = { viewModel.setSortBy(it) },
+                        onToggleSortReverse = { viewModel.toggleSortReverse() },
+                        showSystem = showSystem,
+                        showOS = showOS,
+                        onShowSystemChanged = { viewModel.setShowSystem(it) },
+                        onShowOSChanged = { viewModel.setShowOS(it) },
+                    )
                 },
                 scrollBehavior = scrollBehavior
             )
@@ -199,6 +144,7 @@ fun DenyListScreen(
                 query = query,
                 onQueryChange = viewModel::setQuery,
                 modifier = Modifier
+                    .widthIn(max = 720.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             )
@@ -218,15 +164,18 @@ fun DenyListScreen(
                     }
                 }
             } else {
-                val listState = rememberLazyListState()
-                LazyColumn(
-                    state = listState,
+                val gridState = rememberLazyStaggeredGridState()
+                // Staggered, as cards expand to show processes
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(320.dp),
+                    state = gridState,
                     modifier = Modifier
                         .fillMaxSize()
                         .nestedScroll(scrollBehavior.nestedScrollConnection)
-                        .verticalScrollbar(listState, contentPadding = PaddingValues(vertical = 8.dp)),
+                        .verticalScrollbar(gridState, contentPadding = PaddingValues(vertical = 8.dp)),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalItemSpacing = 8.dp,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(
                         items = apps,
@@ -270,7 +219,7 @@ private fun SearchInput(
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = null,
+                        contentDescription = stringResource(CoreR.string.close),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -279,8 +228,8 @@ private fun SearchInput(
         shape = SearchBarDefaults.inputFieldShape,
         singleLine = true,
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.35f),
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             disabledIndicatorColor = Color.Transparent,
@@ -296,9 +245,10 @@ private fun DenyAppCard(
     onToggleProcess: (DenyProcessState) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    GlassCard(
+    Card(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(0.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(
             modifier = Modifier.animateContentSize(
@@ -322,8 +272,8 @@ private fun DenyAppCard(
                     .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Image(
-                    painter = rememberDrawablePainter(app.info.iconImage),
+                AppIcon(
+                    packageName = app.info.packageName,
                     contentDescription = app.info.label,
                     modifier = Modifier.size(40.dp)
                 )

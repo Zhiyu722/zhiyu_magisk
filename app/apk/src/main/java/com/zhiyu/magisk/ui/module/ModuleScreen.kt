@@ -9,25 +9,23 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
@@ -35,6 +33,8 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -42,8 +42,10 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,18 +59,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import com.zhiyu.magisk.R
 import com.zhiyu.magisk.core.Info
 import com.zhiyu.magisk.core.di.ServiceLocator
@@ -78,11 +84,9 @@ import com.zhiyu.magisk.ui.MainActivity
 import com.zhiyu.magisk.ui.component.ConfirmResult
 import com.zhiyu.magisk.ui.component.MagiskDialog
 import com.zhiyu.magisk.ui.component.MarkdownTextAsync
+import com.zhiyu.magisk.ui.component.onlyHorizontal
 import com.zhiyu.magisk.ui.component.rememberConfirmDialog
 import com.zhiyu.magisk.ui.component.verticalScrollbar
-import com.zhiyu.magisk.ui.glass.GlassCard
-import com.zhiyu.magisk.ui.glass.GlassScreen
-import com.zhiyu.magisk.ui.glass.GlassTopAppBar
 import com.zhiyu.magisk.utils.textHolder
 import kotlinx.coroutines.launch
 import com.zhiyu.magisk.core.R as CoreR
@@ -91,8 +95,10 @@ import com.zhiyu.magisk.core.R as CoreR
 @Composable
 fun ModuleScreen(
     viewModel: ModuleViewModel,
+    isFabAtBottom: Boolean,
     modifier: Modifier = Modifier,
     onRegisterFab: (((() -> Unit)?) -> Unit)? = null,
+    contentFocusRequester: FocusRequester? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -100,7 +106,6 @@ fun ModuleScreen(
     val context = LocalContext.current
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
-    val layoutDirection = LocalLayoutDirection.current
 
     val localInstallDialog = rememberConfirmDialog()
     val confirmInstallTitle = stringResource(CoreR.string.confirm_install_title)
@@ -153,12 +158,11 @@ fun ModuleScreen(
         )
     }
 
-    GlassScreen(
+    Scaffold(
         modifier = modifier,
         topBar = {
-            GlassTopAppBar(
+            TopAppBar(
                 title = { Text(stringResource(CoreR.string.modules)) },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 scrollBehavior = scrollBehavior
             )
         },
@@ -166,12 +170,6 @@ fun ModuleScreen(
             if (onRegisterFab == null) {
                 FloatingActionButton(
                     onClick = { filePicker.launch("application/zip") },
-                    shape = CircleShape,
-                    modifier = Modifier.border(
-                        0.05.dp,
-                        colorScheme.outline.copy(alpha = 0.5f),
-                        CircleShape
-                    ),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     content = {
@@ -194,7 +192,7 @@ fun ModuleScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@GlassScreen
+            return@Scaffold
         }
 
         if (uiState.modules.isEmpty()) {
@@ -206,7 +204,7 @@ fun ModuleScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.padding(horizontal = 32.dp)
                 ) {
                     Icon(
@@ -223,39 +221,51 @@ fun ModuleScreen(
                     )
                 }
             }
-            return@GlassScreen
+            return@Scaffold
         }
 
-        val listState = rememberLazyListState()
-        LazyColumn(
-            state = listState,
+        val listBottomPadding = padding.calculateBottomPadding() + if (isFabAtBottom) 92.dp else 12.dp
+        val scrollbarBottomPadding = padding.calculateBottomPadding() + if (isFabAtBottom) 80.dp else 12.dp
+
+        val gridState = rememberLazyStaggeredGridState()
+        // Staggered, as cards expand; 360dp leaves room for the action buttons row
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Adaptive(360.dp),
+            state = gridState,
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .consumeWindowInsets(padding)
+                .padding(padding.onlyHorizontal())
                 .verticalScrollbar(
-                    listState,
+                    gridState,
                     contentPadding = PaddingValues(
                         top = padding.calculateTopPadding() + 4.dp,
-                        bottom = padding.calculateBottomPadding() + 104.dp
-                    )
+                        bottom = scrollbarBottomPadding,
+                    ),
                 ),
             contentPadding = PaddingValues(
-                start = padding.calculateStartPadding(layoutDirection) + 12.dp,
-                top = padding.calculateTopPadding() + 4.dp,
-                end = padding.calculateEndPadding(layoutDirection) + 12.dp,
-                bottom = padding.calculateBottomPadding() + 104.dp
+                start = 12.dp,
+                top = padding.calculateTopPadding() + 16.dp,
+                end = 12.dp,
+                bottom = listBottomPadding,
             ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalItemSpacing = 8.dp,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { Spacer(Modifier.height(4.dp)) }
             items(
                 items = uiState.modules,
-                key = { it.module.id },
+                // Module ids come from module.prop and can be duplicated, directory names can't
+                key = { it.module.base.name },
                 contentType = { "ModuleCard" }
             ) { item ->
+                val isLast = item == uiState.modules.lastOrNull()
                 ModuleCard(
                     item = item,
                     viewModel = viewModel,
+                    modifier = if (isLast && contentFocusRequester != null) {
+                        Modifier.focusRequester(contentFocusRequester)
+                    } else Modifier,
                     onUpdateClick = { onlineModule ->
                         if (onlineModule != null && Info.isConnected.value == true) {
                             pendingOnlineModule = onlineModule
@@ -264,7 +274,6 @@ fun ModuleScreen(
                     }
                 )
             }
-            item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
@@ -279,14 +288,15 @@ private fun ModuleCard(
     val infoAlpha = if (!item.isRemoved && item.isEnabled && !item.showNotice) 1f else 0.5f
     val strikeThrough = if (item.isRemoved) TextDecoration.LineThrough else TextDecoration.None
     val colorScheme = MaterialTheme.colorScheme
-    var expanded by rememberSaveable(item.module.id) { mutableStateOf(false) }
+    var expanded by rememberSaveable(item.module.base.name) { mutableStateOf(false) }
     val hasDescription = item.module.description.isNotBlank()
 
-    GlassCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = hasDescription) { expanded = !expanded },
-        contentPadding = PaddingValues(0.dp)
+    Card(
+        onClick = { expanded = !expanded },
+        enabled = hasDescription,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Column(modifier = Modifier.alpha(infoAlpha)) {
@@ -319,7 +329,9 @@ private fun ModuleCard(
                     }
                     Switch(
                         checked = item.isEnabled,
-                        onCheckedChange = { viewModel.toggleEnabled(item) }
+                        onCheckedChange = { viewModel.toggleEnabled(item) },
+                        // The switch is its own node, so name the module it enables
+                        modifier = Modifier.semantics { contentDescription = item.module.name },
                     )
                 }
 
@@ -356,10 +368,7 @@ private fun ModuleCard(
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = colorScheme.onSurface.copy(alpha = 0.12f)
-            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AnimatedVisibility(
@@ -370,12 +379,12 @@ private fun ModuleCard(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (item.showAction) {
                             FilledTonalButton(
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = colorScheme.secondaryContainer.copy(alpha = 0.35f),
-                                    contentColor = colorScheme.onSecondaryContainer
-                                ),
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                onClick = { viewModel.runAction(item.module.id, item.module.name) },
+                                // Drop taps while a screen transition runs, so a quick
+                                // second tap can't open another screen
+                                onClick = dropUnlessResumed {
+                                    viewModel.runAction(item.module.base.name, item.module.name)
+                                },
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -384,7 +393,7 @@ private fun ModuleCard(
                                     Icon(
                                         modifier = Modifier.size(18.dp),
                                         imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = stringResource(CoreR.string.module_action)
+                                        contentDescription = null
                                     )
                                     Text(
                                         text = stringResource(CoreR.string.module_action),
@@ -406,7 +415,7 @@ private fun ModuleCard(
                     FilledTonalButton(
                         modifier = Modifier.padding(end = 8.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = colorScheme.tertiaryContainer.copy(alpha = 0.35f),
+                            containerColor = colorScheme.tertiaryContainer,
                             contentColor = colorScheme.onTertiaryContainer
                         ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -419,7 +428,7 @@ private fun ModuleCard(
                             Icon(
                                 modifier = Modifier.size(18.dp),
                                 imageVector = Icons.Default.CloudUpload,
-                                contentDescription = stringResource(CoreR.string.update),
+                                contentDescription = null,
                             )
                             Text(
                                 text = stringResource(CoreR.string.update),
@@ -431,13 +440,10 @@ private fun ModuleCard(
 
                 FilledTonalButton(
                     colors = if (item.isRemoved) {
-                        ButtonDefaults.filledTonalButtonColors(
-                            containerColor = colorScheme.secondaryContainer.copy(alpha = 0.35f),
-                            contentColor = colorScheme.onSecondaryContainer
-                        )
+                        ButtonDefaults.filledTonalButtonColors()
                     } else {
                         ButtonDefaults.filledTonalButtonColors(
-                            containerColor = colorScheme.errorContainer.copy(alpha = 0.35f),
+                            containerColor = colorScheme.errorContainer,
                             contentColor = colorScheme.onErrorContainer
                         )
                     },
@@ -491,6 +497,7 @@ private fun OnlineModuleDialog(
         onDismiss = onDismiss,
         neutralText = stringResource(CoreR.string.download),
         onNeutral = { onDownload(false) },
+        scrollable = true,
     ) {
         MarkdownTextAsync {
             val str = svc.fetchString(item.changelog)

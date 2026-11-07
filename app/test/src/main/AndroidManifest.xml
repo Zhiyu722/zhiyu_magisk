@@ -16,8 +16,4 @@
         android:name="com.zhiyu.magisk.test.AppTestRunner"
         android:targetPackage="com.zhiyu.magisk" />
 
-    <instrumentation
-        android:name="com.zhiyu.magisk.test.TestRunner"
-        android:targetPackage="com.zhiyu.magisk.test" />
-
 </manifest>

@@ -3,7 +3,6 @@ package com.zhiyu.magisk.core
 import android.app.KeyguardManager
 import android.os.Build
 import androidx.lifecycle.MutableLiveData
-import com.zhiyu.magisk.StubApk
 import com.zhiyu.magisk.core.ktx.getProperty
 import com.zhiyu.magisk.core.model.UpdateInfo
 import com.zhiyu.magisk.core.repository.NetworkService
@@ -13,11 +12,7 @@ import com.topjohnwu.superuser.ShellUtils.fastCmd
 import com.topjohnwu.superuser.ShellUtils.fastCmdResult
 import kotlinx.coroutines.Runnable
 
-val isRunningAsStub get() = Info.stub != null
-
 object Info {
-
-    var stub: StubApk.Data? = null
 
     private val EMPTY_UPDATE = UpdateInfo()
     var update = EMPTY_UPDATE
@@ -60,10 +55,20 @@ object Info {
             || getProperty("ro.kernel.qemu", "0") == "1"
             || getProperty("ro.boot.qemu", "0") == "1"
 
+    val isGooglebook get() =
+        AppContext.packageManager.hasSystemFeature("com.google.desktop.gms")
+
+    val isPixel get() =
+        Build.BRAND.equals("google", ignoreCase = true) && !isGooglebook && !isEmulator
+
+    val isHeadlessSystemUser by lazy {
+        getProperty("ro.fw.mu.headless_system_user", "false").toBoolean()
+    }
+
     val isConnected = MutableLiveData(false)
 
     val showSuperUser: Boolean get() {
-        return env.isActive && (Const.USER_ID == 0
+        return env.isActive && (Const.USER_ID == 0 || isHeadlessSystemUser
                 || Config.suMultiuserMode == Config.Value.MULTIUSER_MODE_USER)
     }
 
