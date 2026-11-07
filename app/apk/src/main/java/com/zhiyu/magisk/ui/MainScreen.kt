@@ -23,13 +23,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -84,6 +89,7 @@ import com.zhiyu.magisk.ui.glass.LocalGlassPageActive
 import com.zhiyu.magisk.ui.glass.LocalGlassWindowInfo
 import com.zhiyu.magisk.ui.glass.currentBackdrop
 import com.zhiyu.magisk.ui.glass.quantiseFrost
+import com.zhiyu.magisk.ui.glass.rememberGlassWindowInfo
 import com.zhiyu.magisk.ui.home.HomeScreen
 import com.zhiyu.magisk.ui.home.HomeViewModel
 import com.zhiyu.magisk.ui.install.InstallViewModel
@@ -102,6 +108,7 @@ import com.zhiyu.magisk.core.R as CoreR
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.offset
 
 enum class Tab(val titleRes: Int, val iconRes: Int) {
@@ -137,6 +144,10 @@ fun MainScreen(
     // Publishes the backdrop and scroll level of the currently visible tab, so the floating
     // navigation bar below — which lives outside every screen — can frost up with it.
     GlassBackdropHolderProvider {
+        // Window metrics for the chrome that floats *outside* the pages (the navigation bar and
+        // the FAB). Each page's GlassScreen provides its own, but that value dies with the page;
+        // the bar needs the same orientation info at MainScreen level to decide its own layout.
+        CompositionLocalProvider(LocalGlassWindowInfo provides rememberGlassWindowInfo()) {
         // The pager is full-bleed and the pill is an overlay, so the tab content really does
         // scroll *under* the frosted bar and gets blurred behind it.
         Box(modifier = modifier.fillMaxSize()) {
@@ -220,13 +231,20 @@ fun MainScreen(
             }
             }
 
+            // In landscape the navigation bar is a vertical rail on the start edge, so the FAB
+            // clears it with a smaller bottom inset instead of floating over the content.
+            val isLandscape = LocalGlassWindowInfo.current.isLandscape
+
             AnimatedVisibility(
                 visible = isModulesTab && moduleFabAction != null,
                 enter = scaleIn() + fadeIn(),
                 exit = scaleOut() + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 104.dp),
+                    .padding(
+                        end = 20.dp,
+                        bottom = if (isLandscape) 24.dp else 104.dp
+                    ),
             ) {
                 FloatingActionButton(
                     onClick = { moduleFabAction?.invoke() },
@@ -244,8 +262,15 @@ fun MainScreen(
             FloatingNavigationBar(
                 pagerState = pagerState,
                 visibleTabs = visibleTabs,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(
+                    if (LocalGlassWindowInfo.current.isLandscape) {
+                        Alignment.CenterStart
+                    } else {
+                        Alignment.BottomCenter
+                    }
+                )
             )
+        }
         }
     }
 }
@@ -263,8 +288,9 @@ private val PagerSlide = tween<Float>(durationMillis = 300, easing = FastOutSlow
 private const val PagerFlingVelocity = 800f
 
 /**
- * Lets a horizontal drag across the floating bar page through the tabs, the way flicking the pager
- * itself does.
+ * Lets a drag across the floating bar page through the tabs, the way flicking the pager itself
+ * does. In portrait the bar is horizontal, so a horizontal drag pages; in landscape it is a
+ * vertical rail, so a vertical drag pages (up = next, down = previous).
  *
  * Handled on the **initial** dispatch pass on purpose. Every icon in the bar is `clickable`, and a
  * clickable child consumes the pointer down before an ancestor ever gets a look at it, so a plain
@@ -279,8 +305,9 @@ private const val PagerFlingVelocity = 800f
  */
 private fun Modifier.pagerDrag(
     pagerState: PagerState,
-    pageWidth: Float
-): Modifier = pointerInput(pagerState, pageWidth) {
+    pageSize: Float,
+    vertical: Boolean = false
+): Modifier = pointerInput(pagerState, pageSize, vertical) {
     val slop = viewConfiguration.touchSlop
     while (true) {
         // The gesture loop has to live inside awaitPointerEventScope, but settling the pager is a
@@ -301,23 +328,29 @@ private fun Modifier.pagerDrag(
                 if (!change.pressed) break
                 tracker.addPointerInputChange(change)
 
-                val dx = change.positionChange().x
+                val delta = if (vertical) change.positionChange().y else change.positionChange().x
                 // Total finger travel decides the landing page, so it has to keep accumulating for
                 // the whole gesture — not merely until the drag is first recognised.
-                travelled += dx
+                travelled += delta
                 // Wait for real movement before stealing the gesture from the icons.
                 if (!dragging && abs(travelled) > slop) dragging = true
                 if (dragging) {
                     change.consume()
-                    pagerState.dispatchRawDelta(-dx)
+                    // A HorizontalPager scrolls along x regardless of which way the bar faces, so a
+                    // vertical rail maps its y deltas onto that x axis.
+                    pagerState.dispatchRawDelta(-delta)
                 }
             }
 
             if (!dragging) {
                 null
             } else {
-                val draggedPages = -travelled / pageWidth
-                val velocity = tracker.calculateVelocity().x
+                val draggedPages = -travelled / pageSize
+                val velocity = if (vertical) {
+                    tracker.calculateVelocity().y
+                } else {
+                    tracker.calculateVelocity().x
+                }
                 val flicked = when {
                     velocity > PagerFlingVelocity -> -1
                     velocity < -PagerFlingVelocity -> 1
@@ -336,11 +369,15 @@ private fun Modifier.pagerDrag(
 /**
  * The floating navigation bar, turned into a frosted glass pill.
  *
- * It is composed in the [Scaffold]'s `bottomBar` slot, i.e. *after* the pager content, so it can
- * sample the backdrop published by the currently visible tab — that is what the
- * [GlassBackdropHolderProvider] around the screen is for. The pill tucks itself away while swiping
- * between pages and frosts up as the visible tab is scrolled, so its labels never fight with the
- * content.
+ * It is composed *after* the pager content, so it can sample the backdrop published by the
+ * currently visible tab — that is what the [GlassBackdropHolderProvider] around the screen is for.
+ * The pill tucks itself away while swiping between pages and frosts up as the visible tab is
+ * scrolled, so its labels never fight with the content.
+ *
+ * Orientation: in portrait it is a bottom-centered pill (horizontal strip, horizontal swipe). In
+ * landscape it becomes a vertical rail docked on the start edge, running between the top app bar
+ * and the bottom system inset, so a wide screen does not end up with a squat bar across the middle
+ * that collides with the content — and the swipe runs vertically (up/down, matching the rail).
  */
 @Composable
 private fun FloatingNavigationBar(
@@ -350,63 +387,120 @@ private fun FloatingNavigationBar(
 ) {
     val scope = rememberCoroutineScope()
     val shape = GlassDefaults.chromeShape
-    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    // Drag distance is measured against a whole page, so sliding the pill across its own width
-    // pages once, just like dragging the content would.
     val density = LocalDensity.current
     val windowInfo = LocalWindowInfo.current
     val pageWidth = with(density) { windowInfo.containerSize.width.toFloat() }
+    val pageHeight = with(density) { windowInfo.containerSize.height.toFloat() }
     // The floating bar lives outside the screen it blurs, so it borrows the backdrop
     // published by the currently visible tab.
     val backdrop = currentBackdrop()
     val holder = LocalGlassBackdropHolder.current
 
     val glassWindow = LocalGlassWindowInfo.current
+    val isLandscape = glassWindow.isLandscape
+    // When the rail is vertical, a whole page is one screen height; when the pill is
+    // horizontal, it is one screen width.
+    val pageSize = if (isLandscape) pageHeight else pageWidth
     // Quantised: the pill would otherwise rebuild its blur and re-lay-out its icons on every
     // scroll frame of the page underneath.
     val frost = quantiseFrost(holder?.frost ?: 0f)
     val body = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f + 0.30f * frost)
 
+    // safeDrawing (not navigationBars) so landscape gesture areas and split screen are respected.
+    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDirection = LocalLayoutDirection.current
+
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
         GlassSurface(
             modifier = modifier
-                .padding(
-                    bottom = navBarInset + 12.dp,
-                    start = glassWindow.chromeMargin + 8.dp,
-                    end = glassWindow.chromeMargin + 8.dp
+                .then(
+                    if (isLandscape) {
+                        // Vertical rail on the start edge. It clears the top app bar and the
+                        // bottom system inset, so it never collides with either.
+                        Modifier
+                            .padding(
+                                start = safe.calculateStartPadding(layoutDirection) + glassWindow.chromeMargin + 8.dp,
+                                top = safe.calculateTopPadding() + 76.dp,
+                                bottom = safe.calculateBottomPadding() + 16.dp,
+                                end = 8.dp
+                            )
+                            .fillMaxHeight()
+                            .width(76.dp)
+                    } else {
+                        // Bottom-centered pill, floating above the navigation bar inset.
+                        Modifier
+                            .padding(
+                                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp,
+                                start = glassWindow.chromeMargin + 8.dp,
+                                end = glassWindow.chromeMargin + 8.dp
+                            )
+                            .fillMaxWidth()
+                            .widthIn(max = glassWindow.chromeMaxWidth)
+                            .heightIn(min = 68.dp)
+                    }
                 )
                 .shadow(elevation = 10.dp, shape = shape, clip = false)
-                .fillMaxWidth()
-                .widthIn(max = glassWindow.chromeMaxWidth)
-                .heightIn(min = 68.dp)
-                .pagerDrag(pagerState, pageWidth),
+                .pagerDrag(pagerState, pageSize, vertical = isLandscape),
             shape = shape,
             blurRadius = GlassDefaults.chromeBlur * (0.6f + 0.4f * frost),
             body = body
         ) {
-            Row(
-                modifier = Modifier
-                    // fillMaxWidth + heightIn (never fillMaxSize): the pill must stay a pill.
-                    // fillMaxSize() inside a heightIn(min) pane expands to the whole screen.
-                    .fillMaxWidth()
-                    .heightIn(min = 68.dp)
-                    .padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                visibleTabs.forEachIndexed { index, tab ->
-                    FloatingNavItem(
-                        icon = ImageVector.vectorResource(tab.iconRes),
-                        label = stringResource(tab.titleRes),
-                        selected = pagerState.currentPage == index,
-                        enabled = true,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(index, animationSpec = PagerSlide)
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
+            if (isLandscape) {
+                // Tail the rail to the room it actually has. On a phone in landscape there is
+                // ~220dp of height for five tabs, which cannot fit icon+label rows; on a tablet it
+                // can. Picking per-entry instead of forcing one layout keeps the targets
+                // comfortable on both (apple-design's flexibility rule).
+                val showLabels = glassWindow.heightDp >= 480
+                Column(
+                    modifier = Modifier
+                        // fillMaxHeight + widthIn, never fillMaxSize: the rail must stay a rail.
+                        .fillMaxHeight()
+                        .widthIn(min = 76.dp)
+                        .padding(vertical = 6.dp),
+                    verticalArrangement = Arrangement.SpaceEvenly,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    visibleTabs.forEachIndexed { index, tab ->
+                        FloatingNavItem(
+                            icon = ImageVector.vectorResource(tab.iconRes),
+                            label = stringResource(tab.titleRes),
+                            selected = pagerState.currentPage == index,
+                            enabled = true,
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(index, animationSpec = PagerSlide)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            showLabel = showLabels
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        // fillMaxWidth + heightIn (never fillMaxSize): the pill must stay a pill.
+                        // fillMaxSize() inside a heightIn(min) pane expands to the whole screen.
+                        .fillMaxWidth()
+                        .heightIn(min = 68.dp)
+                        .padding(horizontal = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    visibleTabs.forEachIndexed { index, tab ->
+                        FloatingNavItem(
+                            icon = ImageVector.vectorResource(tab.iconRes),
+                            label = stringResource(tab.titleRes),
+                            selected = pagerState.currentPage == index,
+                            enabled = true,
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(index, animationSpec = PagerSlide)
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -420,7 +514,10 @@ private fun FloatingNavItem(
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Landscape phones are short and tall, so a vertical rail with five icon+label entries would
+    // crush the labels together; the compact rail shows icons only and keeps full-size targets.
+    showLabel: Boolean = true
 ) {
     val contentColor by animateColorAsState(
         targetValue = when {
@@ -451,7 +548,8 @@ private fun FloatingNavItem(
                 role = Role.Tab,
                 onClick = onClick,
             )
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            // Compact rails get a tighter vertical footprint so the touch targets still fit.
+            .padding(horizontal = 4.dp, vertical = if (showLabel) 6.dp else 8.dp),
         contentAlignment = Alignment.Center
     ) {
         // Soft glassy highlight behind the active tab
@@ -471,12 +569,14 @@ private fun FloatingNavItem(
                 modifier = Modifier.size(24.dp),
                 tint = contentColor,
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                color = contentColor,
-            )
+            if (showLabel) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = label,
+                    fontSize = 11.sp,
+                    color = contentColor,
+                )
+            }
         }
     }
 }
