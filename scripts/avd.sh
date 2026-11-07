@@ -297,7 +297,7 @@ live_test_main() {
   local apks=($(print_apks "$@"))
   for apk in "${apks[@]}"; do
     # Cleanup
-    adb shell pm uninstall com.topjohnwu.magisk || true
+    adb shell pm uninstall com.zhiyu.magisk || true
     adb shell /system/xbin/su 0 rm -rf /data/adb/modules
 
     # "Install" Magisk
@@ -316,11 +316,11 @@ live_test_main() {
 
 app_test_main() {
   local apks=($(print_apks "$@"))
-  local pkg='com.topjohnwu.magisk.test'
+  local pkg='com.zhiyu.magisk.test'
   local app="$pkg/$pkg.AppTestRunner"
   for apk in "${apks[@]}"; do
     # Cleanup
-    adb shell pm uninstall com.topjohnwu.magisk || true
+    adb shell pm uninstall com.zhiyu.magisk || true
     adb install --user current -r -g $apk
     adb install --user current -r -g out/test.apk
     am_instrument '.AppTest' $app

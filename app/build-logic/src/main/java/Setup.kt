@@ -269,10 +269,10 @@ fun Project.setupMainApk() {
     setupAppCommon()
 
     androidApp {
-        namespace = "com.topjohnwu.magisk"
+        namespace = "com.zhiyu.magisk"
 
         defaultConfig {
-            applicationId = "com.topjohnwu.magisk"
+            applicationId = "com.zhiyu.magisk"
             versionName = Config.version
             versionCode = Config.versionCode
             ndk {
