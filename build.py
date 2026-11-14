@@ -378,6 +378,24 @@ def build_app():
     mv(source, target)
     header(f"Output: {target}")
 
+    # The stub is built as its own module and embedded into the manager by the Gradle build.
+    # Publish it next to the manager APK as well, so users can install it on its own.
+    candidates = [
+        Path("app", "stub", "build", "outputs", "apk", build_type, f"stub-{build_type}.apk"),
+        Path("app", "core", "src", build_type, "assets", "stub.apk"),
+    ]
+    for source in candidates:
+        if source.exists():
+            target = config["outdir"] / f"stub-{build_type}.apk"
+            cp(source, target)
+            header(f"Output: {target}")
+            break
+
+def build_stub():
+    header("* Building the stub app")
+    apk = build_apk(":stub")
+    header(f"Output: {apk}")
+
 
 def build_test():
     old_release = args.release
@@ -828,6 +846,8 @@ def parse_args():
 
     app_parser = subparsers.add_parser("app", help="build the Magisk app")
 
+    stub_parser = subparsers.add_parser("stub", help="build the stub app")
+    stub_parser.set_defaults(func=build_stub)
     test_parser = subparsers.add_parser("test", help="build the test app")
 
     clean_parser = subparsers.add_parser("clean", help="cleanup")
