@@ -16,6 +16,7 @@ navigationevent = "1.1.2"
 wire = "7.0.3"
 
 [libraries]
+bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version = "1.85" }
 kyant-backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
 commons-compress = { module = "org.apache.commons:commons-compress", version = "1.28.0" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }

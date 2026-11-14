@@ -4,13 +4,16 @@ import android.annotation.SuppressLint
 import android.app.LocaleConfig
 import android.app.LocaleManager
 import android.content.Intent
+import android.content.ContextWrapper
 import android.content.res.Resources
 import android.net.Uri
 import android.os.Build
 import android.os.LocaleList
 import android.provider.Settings
 import androidx.annotation.RequiresApi
+import com.zhiyu.magisk.core.AppApkPath
 import com.zhiyu.magisk.core.AppContext
+import com.zhiyu.magisk.core.isRunningAsStub
 import com.zhiyu.magisk.core.Config
 import com.zhiyu.magisk.core.R
 import org.xmlpull.v1.XmlPullParser
@@ -122,11 +125,24 @@ interface LocaleSetting {
 
         @get:RequiresApi(34)
         val localeConfig: LocaleConfig by lazy {
-            LocaleConfig.fromContextIgnoringOverride(AppContext)
+            // The stub's own package has no locale config, so read it off the real manager APK
+            val context = if (isRunningAsStub) {
+                val pkgInfo = AppContext.packageManager.getPackageArchiveInfo(AppApkPath, 0)!!
+                object : ContextWrapper(AppContext) {
+                    override fun getApplicationInfo() = pkgInfo.applicationInfo
+                }
+            } else {
+                AppContext
+            }
+            LocaleConfig.fromContextIgnoringOverride(context)
         }
 
+        // On the stub the manager's LocaleManager only takes effect from 35 onwards
+        private val localeManagerUsable get() =
+            if (isRunningAsStub) Build.VERSION.SDK_INT >= 35 else Build.VERSION.SDK_INT >= 33
+
         val useLocaleManager by lazy {
-            Build.VERSION.SDK_INT >= 33 &&
+            localeManagerUsable &&
                     localeSettingsIntent.resolveActivity(AppContext.packageManager) != null
         }
 

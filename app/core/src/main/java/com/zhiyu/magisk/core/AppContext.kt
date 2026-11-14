@@ -1,6 +1,7 @@
 package com.zhiyu.magisk.core
 
 import android.app.Activity
+import android.app.LocaleManager
 import android.app.Application
 import android.content.ComponentCallbacks2
 import android.content.Context
@@ -10,6 +11,7 @@ import android.os.Build.VERSION.SDK_INT
 import android.os.Bundle
 import android.system.Os
 import androidx.profileinstaller.ProfileInstaller
+import com.zhiyu.magisk.StubApk
 import com.zhiyu.magisk.core.base.UntrackedActivity
 import com.zhiyu.magisk.core.utils.LocaleSetting
 import com.zhiyu.magisk.core.utils.NetworkObserver
@@ -76,7 +78,11 @@ object AppContext : ContextWrapper(null),
         app.registerActivityLifecycleCallbacks(this)
         app.registerComponentCallbacks(this)
 
-        AppApkPath = base.packageResourcePath
+        AppApkPath = if (isRunningAsStub) {
+            StubApk.current(base).path
+        } else {
+            base.packageResourcePath
+        }
         resources.patch()
 
         val shellBuilder = Shell.Builder.create()
@@ -95,7 +101,14 @@ object AppContext : ContextWrapper(null),
         Shell.getShell(null) {}
 
         networkObserver = NetworkObserver.init(this)
-        if (!BuildConfig.DEBUG) {
+
+        if (SDK_INT >= 34 && isRunningAsStub) {
+            // The stub has no locale config of its own, so hand the manager's over manually
+            val lm = getSystemService(LocaleManager::class.java)
+            lm.overrideLocaleConfig = LocaleSetting.localeConfig
+        }
+
+        if (!BuildConfig.DEBUG && !isRunningAsStub) {
             @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
             GlobalScope.launch(Dispatchers.IO) {
                 ProfileInstaller.writeProfile(this@AppContext)

@@ -29,12 +29,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
+import com.zhiyu.magisk.core.tasks.AppMigration
 import com.zhiyu.magisk.core.utils.LocaleSetting
 import com.zhiyu.magisk.core.utils.MediaStoreUtils
 import com.zhiyu.magisk.ui.component.AdaptiveColumns
@@ -82,6 +84,10 @@ fun SettingsScreen(
         onOpenDownloadPathDialog = viewModel::openDownloadPathDialog,
         onSaveDownloadPath = viewModel::saveDownloadPath,
         onToggleRandomPackageName = viewModel::setRandomPackageName,
+        onOpenHideAppDialog = viewModel::openHideAppDialog,
+        onOpenRestoreAppDialog = viewModel::openRestoreAppDialog,
+        onHideApp = viewModel::hideApp,
+        onRestoreApp = viewModel::restoreApp,
         onCreateHosts = viewModel::createHosts,
         onToggleZygisk = viewModel::toggleZygisk,
         onToggleDenyList = viewModel::toggleDenyList,
@@ -116,6 +122,10 @@ fun SettingsContent(
     onOpenDownloadPathDialog: () -> Unit,
     onSaveDownloadPath: (String) -> Unit,
     onToggleRandomPackageName: (Boolean) -> Unit,
+    onOpenHideAppDialog: () -> Unit,
+    onOpenRestoreAppDialog: () -> Unit,
+    onHideApp: (String) -> Unit,
+    onRestoreApp: () -> Unit,
     onCreateHosts: () -> Unit,
     onToggleZygisk: (Boolean) -> Unit,
     onToggleDenyList: (Boolean) -> Unit,
@@ -183,6 +193,8 @@ fun SettingsContent(
                             onToggleCheckUpdate = onToggleCheckUpdate,
                             onOpenDownloadPathDialog = onOpenDownloadPathDialog,
                             onToggleRandomPackageName = onToggleRandomPackageName,
+                            onOpenHideAppDialog = onOpenHideAppDialog,
+                            onOpenRestoreAppDialog = onOpenRestoreAppDialog,
                         )
                     }
                 }
@@ -198,6 +210,8 @@ fun SettingsContent(
                             onToggleCheckUpdate = onToggleCheckUpdate,
                             onOpenDownloadPathDialog = onOpenDownloadPathDialog,
                             onToggleRandomPackageName = onToggleRandomPackageName,
+                            onOpenHideAppDialog = onOpenHideAppDialog,
+                            onOpenRestoreAppDialog = onOpenRestoreAppDialog,
                         )
                     }
                 }
@@ -240,6 +254,19 @@ fun SettingsContent(
             DownloadPathDialog(
                 initialPath = dialog.initialPath,
                 onConfirm = onSaveDownloadPath,
+                onDismiss = onDismissDialog,
+            )
+        }
+        is SettingsDialog.HideApp -> {
+            HideAppDialog(
+                initialName = dialog.initialName,
+                onConfirm = onHideApp,
+                onDismiss = onDismissDialog,
+            )
+        }
+        is SettingsDialog.RestoreApp -> {
+            RestoreAppDialog(
+                onConfirm = onRestoreApp,
                 onDismiss = onDismissDialog,
             )
         }
@@ -307,6 +334,8 @@ private fun AppSettingsSection(
     onToggleCheckUpdate: (Boolean) -> Unit,
     onOpenDownloadPathDialog: () -> Unit,
     onToggleRandomPackageName: (Boolean) -> Unit,
+    onOpenHideAppDialog: () -> Unit,
+    onOpenRestoreAppDialog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     SmallTitle(text = stringResource(CoreR.string.home_app_title))
@@ -386,6 +415,29 @@ private fun AppSettingsSection(
             checked = uiState.randomPackageNameEnabled,
             onCheckedChange = onToggleRandomPackageName
         )
+
+        // Hide / restore through the stub APK. Both rows share the slot: a hidden manager offers
+        // only the restore action, an unhidden one only the hide action.
+        val hideVisible = uiState.isHideSupported || uiState.hiddenPackageName.isNotEmpty()
+        if (hideVisible) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            if (uiState.hiddenPackageName.isNotEmpty()) {
+                SettingsArrow(
+                    title = stringResource(CoreR.string.settings_restore_app_title),
+                    summary = uiState.hiddenPackageName,
+                    onClick = onOpenRestoreAppDialog
+                )
+            } else {
+                SettingsArrow(
+                    title = stringResource(CoreR.string.settings_hide_app_title),
+                    summary = stringResource(CoreR.string.settings_hide_app_summary),
+                    onClick = onOpenHideAppDialog
+                )
+            }
+        }
     }
 }
 
@@ -627,5 +679,66 @@ private fun DownloadPathDialog(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
+
+@Composable
+private fun HideAppDialog(
+    initialName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var name by rememberSaveable(initialName) { mutableStateOf(initialName) }
+    val trimmed = name.trim()
+    val isValid = trimmed.isNotEmpty() && trimmed.length <= AppMigration.MAX_LABEL_LENGTH
+    val resources = LocalResources.current
+
+    MagiskDialog(
+        modifier = modifier,
+        onDismissRequest = onDismiss,
+        title = stringResource(CoreR.string.settings_hide_app_title),
+        confirmText = stringResource(android.R.string.ok),
+        confirmEnabled = isValid,
+        onConfirm = { if (isValid) onConfirm(trimmed) },
+        dismissText = stringResource(android.R.string.cancel),
+        onDismiss = onDismiss,
+        scrollable = true,
+    ) {
+        Column {
+            Text(
+                text = resources.getString(CoreR.string.settings_hide_app_summary),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                isError = !isValid,
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun RestoreAppDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val resources = LocalResources.current
+    MagiskDialog(
+        modifier = modifier,
+        onDismissRequest = onDismiss,
+        title = stringResource(CoreR.string.settings_restore_app_title),
+        confirmText = stringResource(android.R.string.ok),
+        onConfirm = onConfirm,
+        dismissText = stringResource(android.R.string.cancel),
+        onDismiss = onDismiss,
+        scrollable = true,
+    ) {
+        Text(resources.getString(CoreR.string.restore_app_confirmation))
     }
 }

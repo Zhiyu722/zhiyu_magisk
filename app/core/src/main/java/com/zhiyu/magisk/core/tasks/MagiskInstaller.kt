@@ -1,5 +1,6 @@
 package com.zhiyu.magisk.core.tasks
 
+import org.apache.commons.compress.archivers.zip.ZipFile
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.os.Process
@@ -7,9 +8,11 @@ import android.system.Os
 import androidx.annotation.WorkerThread
 import androidx.core.os.postDelayed
 import com.zhiyu.magisk.core.AppApkPath
+import com.zhiyu.magisk.StubApk
 import com.zhiyu.magisk.core.BuildConfig
 import com.zhiyu.magisk.core.Config
 import com.zhiyu.magisk.core.Const
+import com.zhiyu.magisk.core.isRunningAsStub
 import com.zhiyu.magisk.core.Info
 import com.zhiyu.magisk.core.di.ServiceLocator
 import com.zhiyu.magisk.core.ktx.copyAll
@@ -123,29 +126,54 @@ abstract class MagiskInstallImpl protected constructor(
 
         try {
             // Extract binaries
-            val info = context.applicationInfo
-            val libs = File(info.nativeLibraryDir).listFiles { _, name ->
-                name.startsWith("lib") && name.endsWith(".so")
-            } ?: emptyArray()
+            if (isRunningAsStub) {
+                // The stub carries the binaries as jar entries; the manager's own lib dir belongs
+                // to the stub, not to the repackaged manager
+                ZipFile.builder().setFile(StubApk.current(context)).get().use { zf ->
+                    zf.entries.asSequence().filter {
+                        !it.isDirectory && it.name.startsWith("lib/${Const.CPU_ABI}/")
+                    }.forEach {
+                        val n = it.name.substring(it.name.lastIndexOf('/') + 1)
+                        val name = n.substring(3, n.length - 3)
+                        val dest = File(installDir, name)
+                        zf.getInputStream(it).writeTo(dest)
+                        dest.setExecutable(true)
+                    }
 
-            for (lib in libs) {
-                val name = lib.name.substring(3, lib.name.length - 3)
-                Os.symlink(lib.path, "$installDir/$name")
-            }
+                    val abi32 = Const.CPU_ABI_32
+                    if (Process.is64Bit() && abi32 != null) {
+                        val entry = zf.getEntry("lib/$abi32/libmagisk.so")
+                        if (entry != null) {
+                            val magisk32 = File(installDir, "magisk32")
+                            zf.getInputStream(entry).writeTo(magisk32)
+                        }
+                    }
+                }
+            } else {
+                val info = context.applicationInfo
+                val libs = File(info.nativeLibraryDir).listFiles { _, name ->
+                    name.startsWith("lib") && name.endsWith(".so")
+                } ?: emptyArray()
 
-            // Also extract magisk32 on 64-bit devices that supports 32-bit
-            val abi32 = Const.CPU_ABI_32
-            if (Process.is64Bit() && abi32 != null) {
-                val name = "lib/$abi32/libmagisk.so"
-                val entry = javaClass.classLoader!!.getResourceAsStream(name)
-                if (entry != null) {
-                    val magisk32 = File(installDir, "magisk32")
-                    entry.writeTo(magisk32)
+                for (lib in libs) {
+                    val name = lib.name.substring(3, lib.name.length - 3)
+                    Os.symlink(lib.path, "$installDir/$name")
+                }
+
+                // Also extract magisk32 on 64-bit devices that supports 32-bit
+                val abi32 = Const.CPU_ABI_32
+                if (Process.is64Bit() && abi32 != null) {
+                    val name = "lib/$abi32/libmagisk.so"
+                    val entry = javaClass.classLoader!!.getResourceAsStream(name)
+                    if (entry != null) {
+                        val magisk32 = File(installDir, "magisk32")
+                        entry.writeTo(magisk32)
+                    }
                 }
             }
 
             // Extract scripts
-            for (script in listOf("util_functions.sh", "boot_patch.sh", "addon.d.sh")) {
+            for (script in listOf("util_functions.sh", "boot_patch.sh", "addon.d.sh", "stub.apk")) {
                 val dest = File(installDir, script)
                 context.assets.open(script).writeTo(dest)
             }

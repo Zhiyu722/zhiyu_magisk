@@ -1,5 +1,6 @@
 package com.zhiyu.magisk.core
 
+import android.os.Bundle
 import androidx.core.content.edit
 import com.zhiyu.magisk.core.di.ServiceLocator
 import com.zhiyu.magisk.core.model.ColorMode
@@ -11,6 +12,7 @@ import kotlinx.coroutines.GlobalScope
 object Config : PreferenceConfig, DBConfig {
 
     override val settingsDB get() = ServiceLocator.settingsDB
+    override val stringDB get() = ServiceLocator.stringDB
     override val context get() = ServiceLocator.deContext
     @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     override val coroutineScope get() = GlobalScope
@@ -37,6 +39,12 @@ object Config : PreferenceConfig, DBConfig {
         const val THEME_ORDINAL = "theme_ordinal"
         const val DOH = "doh"
         const val RAND_NAME = "rand_name"
+        const val SU_MANAGER = "requester"
+        const val KEYSTORE = "keystore"
+        const val ASKED_HOME = "asked_home"
+
+        // The database entries the stub flow keeps and the ones a migration must not copy over
+        val NO_MIGRATION = setOf(ASKED_HOME)
     }
 
     object OldValue {
@@ -112,6 +120,13 @@ object Config : PreferenceConfig, DBConfig {
             LocaleSetting.instance.setLocale(value)
         }
 
+    // Set while the app is repackaged as the stub: the manager keeps its signing keystore and the
+    // package name of the hidden manager here so it can find itself again after an update
+    var suManager by dbStrings(Key.SU_MANAGER, "", true)
+    var keyStoreRaw by dbStrings(Key.KEYSTORE, "", true)
+
+    var askedHome by preference(Key.ASKED_HOME, false)
+
     var zygisk by dbSettings(Key.ZYGISK, Info.isEmulator)
     var suNotification by preferenceStrInt(Key.SU_NOTIFICATION, Value.NOTIFICATION_TOAST)
     var suMntNamespaceMode by dbSettings(Key.SU_MNT_NS, Value.NAMESPACE_MODE_REQUESTER)
@@ -127,7 +142,39 @@ object Config : PreferenceConfig, DBConfig {
     private const val SU_FINGERPRINT = "su_fingerprint"
     private const val UPDATE_CHANNEL = "update_channel"
 
-    fun init() {
+    fun toBundle(): Bundle {
+        val map = prefs.all - Key.NO_MIGRATION
+        return Bundle().apply {
+            for ((key, value) in map) {
+                when (value) {
+                    is String -> putString(key, value)
+                    is Int -> putInt(key, value)
+                    is Boolean -> putBoolean(key, value)
+                }
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun fromBundle(bundle: Bundle) {
+        val keys = bundle.keySet().apply { removeAll(Key.NO_MIGRATION) }
+        prefs.edit {
+            for (key in keys) {
+                when (val value = bundle.get(key)) {
+                    is String -> putString(key, value)
+                    is Int -> putInt(key, value)
+                    is Boolean -> putBoolean(key, value)
+                }
+            }
+        }
+    }
+
+    fun init(bundle: Bundle?) {
+        // Only try to load prefs when fresh install
+        if (bundle != null && prefs.all.isEmpty()) {
+            fromBundle(bundle)
+        }
+
         prefs.edit {
             // Migrate su_fingerprint
             if (prefs.getBoolean(SU_FINGERPRINT, false))

@@ -8,6 +8,8 @@ import com.zhiyu.magisk.core.AppContext
 import com.zhiyu.magisk.core.Config
 import com.zhiyu.magisk.core.Const
 import com.zhiyu.magisk.core.Info
+import com.zhiyu.magisk.core.isRunningAsStub
+import com.zhiyu.magisk.core.tasks.AppMigration
 import com.zhiyu.magisk.core.R as CoreR
 import com.zhiyu.magisk.core.ktx.toast
 import com.zhiyu.magisk.core.model.ColorMode
@@ -60,6 +62,10 @@ class SettingsViewModel : BaseViewModel() {
             downloadPath = Config.downloadDir,
             downloadPathDisplay = MediaStoreUtils.fullPath(Config.downloadDir),
             randomPackageNameEnabled = Config.randName,
+
+            // Only an unhidden manager with a working root can repackage itself
+            isHideSupported = !isRunningAsStub && Info.env.isActive,
+            hiddenPackageName = Config.suManager,
 
             zygiskEnabled = Config.zygisk,
             isZygiskPendingReboot = Config.zygisk != Info.isZygiskEnabled,
@@ -160,6 +166,35 @@ class SettingsViewModel : BaseViewModel() {
                 downloadPathDisplay = MediaStoreUtils.fullPath(path),
                 activeDialog = null,
             )
+        }
+    }
+
+    fun openHideAppDialog() {
+        val name = AppContext.applicationInfo.loadLabel(AppContext.packageManager).toString()
+        _uiState.update { it.copy(activeDialog = SettingsDialog.HideApp(name)) }
+    }
+
+    fun openRestoreAppDialog() {
+        _uiState.update { it.copy(activeDialog = SettingsDialog.RestoreApp) }
+    }
+
+    fun hideApp(name: String) {
+        _uiState.update { it.copy(activeDialog = null) }
+        viewModelScope.launch {
+            // A successful hide replaces this app with the stub, so there is nothing to update
+            if (!AppMigration.patchAndHide(AppContext, name)) {
+                showToast(CoreR.string.failure)
+            }
+        }
+    }
+
+    fun restoreApp() {
+        _uiState.update { it.copy(activeDialog = null) }
+        viewModelScope.launch {
+            if (!AppMigration.restoreApp(AppContext)) {
+                showToast(CoreR.string.failure)
+            }
+            _uiState.update { it.copy(hiddenPackageName = Config.suManager) }
         }
     }
 

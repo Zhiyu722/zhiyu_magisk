@@ -1,21 +1,37 @@
 package com.zhiyu.magisk.core.base
 
+import android.Manifest.permission.REQUEST_INSTALL_PACKAGES
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import com.zhiyu.magisk.StubApk
+import com.zhiyu.magisk.core.BuildConfig
+import com.zhiyu.magisk.core.BuildConfig.APP_PACKAGE_NAME
 import com.zhiyu.magisk.core.Config
+import com.zhiyu.magisk.core.Const
+import com.zhiyu.magisk.core.Info
 import com.zhiyu.magisk.core.JobService
+import com.zhiyu.magisk.core.R
 import com.zhiyu.magisk.core.di.ServiceLocator
+import com.zhiyu.magisk.core.isRunningAsStub
+import com.zhiyu.magisk.core.ktx.writeTo
+import com.zhiyu.magisk.core.tasks.AppMigration
 import com.zhiyu.magisk.core.utils.RootUtils
 import com.zhiyu.magisk.view.Notifications
 import com.zhiyu.magisk.view.Shortcuts
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.io.File
+import java.io.IOException
 
 interface SplashScreenHost : IActivityExtension {
     val splashController: SplashController<*>
 
     fun onCreateUi(savedInstanceState: Bundle?)
+    fun showInvalidStateMessage()
 }
 
 class SplashController<T>(private val activity: T)
@@ -27,20 +43,35 @@ class SplashController<T>(private val activity: T)
 
     private var shouldCreateUiOnResume = false
 
-    fun preOnCreate() {}
+    fun preOnCreate() {
+        if (isRunningAsStub && !splashShown) {
+            // The stub is not the platform splash screen's app, so apply the theme by hand
+            activity.theme.applyStyle(R.style.StubSplashTheme, true)
+        }
+    }
 
     fun onCreate(savedInstanceState: Bundle?) {
-        val splashScreen = activity.installSplashScreen()
-        splashScreen.setKeepOnScreenCondition { !splashShown }
+        if (!isRunningAsStub) {
+            val splashScreen = activity.installSplashScreen()
+            splashScreen.setKeepOnScreenCondition { !splashShown }
+        }
 
         if (splashShown) {
             doCreateUi(savedInstanceState)
         } else {
             Shell.getShell(Shell.EXECUTOR) {
+                if (isRunningAsStub && !it.isRoot) {
+                    // A hidden manager without root is useless: tell the user instead of loading
+                    activity.showInvalidStateMessage()
+                    return@getShell
+                }
                 activity.initializeApp()
                 activity.runOnUiThread {
                     splashShown = true
-                    if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    if (isRunningAsStub) {
+                        // Re-launch the activity so the stub splash theme is dropped
+                        activity.relaunch()
+                    } else if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                         doCreateUi(savedInstanceState)
                     } else {
                         shouldCreateUiOnResume = true
@@ -62,7 +93,58 @@ class SplashController<T>(private val activity: T)
     }
 
     private fun T.initializeApp() {
-        Config.init()
+        val prevPkg = launchPackage
+        val prevConfig = intent.getBundleExtra(Const.Key.PREV_CONFIG)
+        val isPackageMigration = prevPkg != null && prevConfig != null
+
+        Config.init(prevConfig)
+
+        if (packageName != APP_PACKAGE_NAME) {
+            runCatching {
+                // Running under a repackaged name: the original package would be a decoy, drop it
+                packageManager.getApplicationInfo(APP_PACKAGE_NAME, 0)
+                Shell.cmd("(pm uninstall $APP_PACKAGE_NAME)& >/dev/null 2>&1").exec()
+            }
+        } else {
+            if (Config.suManager.isNotEmpty()) {
+                Config.suManager = ""
+            }
+            if (isPackageMigration) {
+                Shell.cmd("(pm uninstall $prevPkg)& >/dev/null 2>&1").exec()
+            }
+        }
+
+        if (isPackageMigration) {
+            runOnUiThread {
+                // The process has to restart once the package name changed under it
+                StubApk.restartProcess(this)
+            }
+            return
+        }
+
+        // Validate the stub: a version mismatch or an unpatched placeholder means the stub in the
+        // assets is newer than the installed one and has to be reinstalled
+        if (isRunningAsStub && (
+                Info.stub!!.version != BuildConfig.STUB_VERSION ||
+                intent.component!!.className.contains(AppMigration.PLACEHOLDER))
+        ) {
+            withPermission(REQUEST_INSTALL_PACKAGES) { granted ->
+                if (granted) {
+                    lifecycleScope.launch {
+                        val apk = File(cacheDir, "stub.apk")
+                        try {
+                            assets.open("stub.apk").writeTo(apk)
+                            AppMigration.upgradeStub(activity, apk)?.let {
+                                startActivity(it)
+                            }
+                        } catch (e: IOException) {
+                            Timber.e(e)
+                        }
+                    }
+                }
+            }
+            return
+        }
 
         Notifications.setup()
         JobService.schedule(this)

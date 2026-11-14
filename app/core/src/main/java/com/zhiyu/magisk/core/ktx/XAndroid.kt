@@ -46,6 +46,9 @@ fun Context.getBitmap(id: Int): Bitmap {
     return bitmap
 }
 
+val Context.deviceProtectedContext: Context get() =
+    if (SDK_INT >= Build.VERSION_CODES.N) createDeviceProtectedStorageContext() else this
+
 fun Context.cachedFile(name: String) = File(cacheDir, name)
 
 fun ApplicationInfo.getLabel(pm: PackageManager): String {

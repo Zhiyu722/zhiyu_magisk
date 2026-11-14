@@ -240,4 +240,15 @@
     <string name="reboot_apply_change">Reboot to apply changes</string>
     <string name="running_exit_title">Execution in progress</string>
     <string name="running_exit_msg">Are you sure you want to exit? The running operation may not complete.</string>
+    <string name="settings_hide_app_title">Hide the Magisk app</string>
+    <string name="settings_hide_app_summary">Install a proxy app with a random package ID and custom app label</string>
+    <string name="settings_restore_app_title">Restore the Magisk app</string>
+    <string name="settings_restore_app_summary">Unhide the app and restore the original APK</string>
+    <string name="setting_add_shortcut_summary">Add a pretty shortcut to the home screen in case the name and icon are difficult to recognize after hiding the app</string>
+    <string name="hide_app_title">Hiding the Magisk app…</string>
+    <string name="unsupport_nonroot_stub_title">@string/settings_restore_app_title</string>
+    <string name="unsupport_nonroot_stub_msg">The hidden Magisk app cannot continue to work because root was lost. Please restore the original APK.</string>
+    <string name="add_shortcut_title">Add shortcut to home screen</string>
+    <string name="add_shortcut_msg">After hiding this app, its name and icon might become difficult to recognize. Do you want to add a pretty shortcut to the home screen?</string>
+    <string name="restore_app_confirmation">This will restore the hidden app back to the original app. Do you really want to do this?</string>
 </resources>

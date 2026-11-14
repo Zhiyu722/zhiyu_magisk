@@ -1,6 +1,7 @@
 package com.zhiyu.magisk.ui
 
 import android.Manifest
+import android.widget.Toast
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -28,7 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.core.net.toUri
+import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
@@ -36,7 +39,11 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.zhiyu.magisk.R
 import com.zhiyu.magisk.arch.VMFactory
+import com.zhiyu.magisk.view.Shortcuts
 import com.zhiyu.magisk.core.Config
+import com.zhiyu.magisk.core.tasks.AppMigration
+import com.zhiyu.magisk.core.ktx.toast
+import com.zhiyu.magisk.core.isRunningAsStub
 import com.zhiyu.magisk.core.Const
 import com.zhiyu.magisk.core.Info
 import com.zhiyu.magisk.core.base.ActivityExtension
@@ -64,6 +71,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 import com.zhiyu.magisk.core.R as CoreR
@@ -80,6 +88,8 @@ class MainActivity : ComponentActivity(), SplashScreenHost {
     // A tab requested by a new intent while the activity is running (it's singleTask)
     private val tabRequest = MutableStateFlow<Int?>(null)
     internal val showUnsupported = MutableStateFlow<List<Pair<Int, Int>>>(emptyList())
+    private val showInvalidState = MutableStateFlow(false)
+    private val showShortcutPrompt = MutableStateFlow(false)
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base.wrap())
@@ -111,6 +121,7 @@ class MainActivity : ComponentActivity(), SplashScreenHost {
     @SuppressLint("InlinedApi")
     override fun onCreateUi(savedInstanceState: Bundle?) {
         showUnsupportedMessage()
+        askForHomeShortcut()
 
         // Only ask on startup, not every time the activity is recreated
         if (savedInstanceState == null && Config.checkUpdate) {
@@ -223,7 +234,20 @@ class MainActivity : ComponentActivity(), SplashScreenHost {
                         )
                     }
                     MainActivityDialogs(
+                        showInvalid = showInvalidState.collectAsStateWithLifecycle().value,
                         unsupportedMessages = showUnsupported.collectAsStateWithLifecycle().value,
+                        showShortcut = showShortcutPrompt.collectAsStateWithLifecycle().value,
+                        onInvalidConfirmed = {
+                            showInvalidState.value = false
+                            handleInvalidStateInstall()
+                        },
+                        onShortcutConfirmed = {
+                            showShortcutPrompt.value = false
+                            Shortcuts.addHomeIcon(this@MainActivity)
+                        },
+                        onShortcutDismissed = {
+                            showShortcutPrompt.value = false
+                        },
                     )
                 }
             }
@@ -362,6 +386,35 @@ class MainActivity : ComponentActivity(), SplashScreenHost {
         }
     }
 
+    @SuppressLint("InlinedApi")
+    override fun showInvalidStateMessage() {
+        showInvalidState.value = true
+    }
+
+    internal fun handleInvalidStateInstall() {
+        extension.withPermission(Manifest.permission.REQUEST_INSTALL_PACKAGES) {
+            if (!it) {
+                toast(CoreR.string.install_unknown_denied, Toast.LENGTH_SHORT)
+                showInvalidState.value = true
+            } else {
+                lifecycleScope.launch {
+                    if (!AppMigration.restoreApp(this@MainActivity)) {
+                        toast(CoreR.string.failure, Toast.LENGTH_LONG)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun askForHomeShortcut() {
+        // A hidden manager has no launcher icon, so offer to pin one after the first launch
+        if (isRunningAsStub && !Config.askedHome &&
+            ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            Config.askedHome = true
+            showShortcutPrompt.value = true
+        }
+    }
+
     private fun showUnsupportedMessage() {
         val messages = mutableListOf<Pair<Int, Int>>()
 
@@ -400,10 +453,30 @@ private fun LeaveInterruptedScreen(navigator: Navigator, key: Route) {
 
 @Composable
 private fun MainActivityDialogs(
+    showInvalid: Boolean,
     unsupportedMessages: List<Pair<Int, Int>>,
+    showShortcut: Boolean,
+    onInvalidConfirmed: () -> Unit,
+    onShortcutConfirmed: () -> Unit,
+    onShortcutDismissed: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val resources = LocalResources.current
+
+    val invalidDialog = rememberConfirmDialog(
+        onConfirm = onInvalidConfirmed,
+        onDismiss = {}
+    )
+
+    LaunchedEffect(showInvalid) {
+        if (showInvalid) {
+            invalidDialog.showConfirm(
+                title = resources.getString(CoreR.string.unsupport_nonroot_stub_title),
+                content = resources.getString(CoreR.string.unsupport_nonroot_stub_msg),
+                confirm = resources.getString(CoreR.string.install),
+            )
+        }
+    }
 
     var currentUnsupportedIndex by rememberSaveable { mutableIntStateOf(0) }
     val unsupportedDialog = rememberConfirmDialog(
@@ -418,6 +491,20 @@ private fun MainActivityDialogs(
             unsupportedDialog.showConfirm(
                 title = resources.getString(titleRes),
                 content = resources.getString(msgRes),
+            )
+        }
+    }
+
+    val shortcutDialog = rememberConfirmDialog(
+        onConfirm = onShortcutConfirmed,
+        onDismiss = onShortcutDismissed
+    )
+
+    LaunchedEffect(showShortcut) {
+        if (showShortcut) {
+            shortcutDialog.showConfirm(
+                title = resources.getString(CoreR.string.add_shortcut_title),
+                content = resources.getString(CoreR.string.add_shortcut_msg),
             )
         }
     }

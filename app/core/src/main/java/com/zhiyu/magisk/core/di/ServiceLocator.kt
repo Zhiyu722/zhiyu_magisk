@@ -8,6 +8,7 @@ import com.zhiyu.magisk.core.AppContext
 import com.zhiyu.magisk.core.Const
 import com.zhiyu.magisk.core.data.SuLogDatabase
 import com.zhiyu.magisk.core.data.magiskdb.PolicyDao
+import com.zhiyu.magisk.core.data.magiskdb.StringDao
 import com.zhiyu.magisk.core.data.magiskdb.SettingsDao
 import com.zhiyu.magisk.core.repository.FirmwareCrawler
 import com.zhiyu.magisk.core.repository.LogRepository
@@ -23,6 +24,7 @@ object ServiceLocator {
     // Database
     val policyDB = PolicyDao()
     val settingsDB = SettingsDao()
+    val stringDB = StringDao()
     val sulogDB by lazy { createSuLogDatabase(deContext).suLogDao() }
     val logRepo by lazy { LogRepository(sulogDB) }
 

@@ -3,6 +3,7 @@ package com.zhiyu.magisk.core
 import android.app.KeyguardManager
 import android.os.Build
 import androidx.lifecycle.MutableLiveData
+import com.zhiyu.magisk.StubApk
 import com.zhiyu.magisk.core.ktx.getProperty
 import com.zhiyu.magisk.core.model.UpdateInfo
 import com.zhiyu.magisk.core.repository.NetworkService
@@ -12,7 +13,12 @@ import com.topjohnwu.superuser.ShellUtils.fastCmd
 import com.topjohnwu.superuser.ShellUtils.fastCmdResult
 import kotlinx.coroutines.Runnable
 
+val isRunningAsStub get() = Info.stub != null
+
 object Info {
+
+    // Set by the stub's App subclass when the manager is running inside the stub
+    var stub: StubApk.Data? = null
 
     private val EMPTY_UPDATE = UpdateInfo()
     var update = EMPTY_UPDATE
